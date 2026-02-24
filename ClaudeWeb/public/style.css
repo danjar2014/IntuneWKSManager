@@ -1,0 +1,339 @@
+:root {
+  --font-sans: 'Outfit', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  --transition: 0.2s ease;
+}
+
+/* Thème Amundi (inspiré www.amundi.com) */
+[data-theme="dark"] {
+  --bg: #0a1628;
+  --bg-elevated: #0f1f38;
+  --bg-input: #132842;
+  --border: #1e3a5f;
+  --text: #e8eef5;
+  --text-muted: #7b9bb8;
+  --accent: #0066b3;
+  --accent-hover: #0080d4;
+  --user-bubble: #1e3a5f;
+  --bot-bubble: #132842;
+  --header-border: rgba(255,255,255,0.08);
+}
+
+[data-theme="light"] {
+  --bg: #f0f4f9;
+  --bg-elevated: #ffffff;
+  --bg-input: #ffffff;
+  --border: #c5d5e6;
+  --text: #0a1628;
+  --text-muted: #5a7a9a;
+  --accent: #0066b3;
+  --accent-hover: #004d89;
+  --user-bubble: #d4e4f4;
+  --bot-bubble: #e8eef5;
+  --header-border: rgba(0,0,0,0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 102, 179, 0.18), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 102, 179, 0.08), transparent);
+}
+
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 102, 179, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 102, 179, 0.04), transparent);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--header-border);
+  background: var(--bg-elevated);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(12px);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logo h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.hello-user {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.hello-user #userName {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.theme-toggle {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), transform 0.15s ease;
+}
+
+.theme-toggle:hover {
+  background: var(--border);
+}
+
+.theme-toggle:active {
+  transform: scale(0.96);
+}
+
+.theme-icon {
+  position: absolute;
+  font-size: 1.2rem;
+}
+
+.theme-icon.moon { display: none; }
+.theme-icon.sun { display: block; }
+
+[data-theme="light"] .theme-icon.moon { display: block; }
+[data-theme="light"] .theme-icon.sun { display: none; }
+
+/* Chat */
+.chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1rem 1.25rem;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.messages::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.messages::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.welcome {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.welcome.hidden {
+  display: none;
+}
+
+.msg {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  animation: msgIn 0.25s ease;
+}
+
+@keyframes msgIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg.user {
+  flex-direction: row-reverse;
+}
+
+.msg-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.msg.user .msg-avatar {
+  background: var(--accent);
+  color: #fff;
+}
+
+.msg.bot .msg-avatar {
+  background: var(--bot-bubble);
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+
+.msg-bubble {
+  max-width: 85%;
+  padding: 0.85rem 1.1rem;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.msg.user .msg-bubble {
+  background: var(--user-bubble);
+  color: var(--text);
+}
+
+.msg.bot .msg-bubble {
+  background: var(--bot-bubble);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+.msg-bubble .line {
+  display: block;
+}
+
+/* Input */
+.input-area {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  padding: 0.75rem 0;
+  margin-top: auto;
+}
+
+.input-area textarea {
+  flex: 1;
+  min-height: 52px;
+  max-height: 180px;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.input-area textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.input-area textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+
+.send-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 52px;
+  padding: 0 1.25rem;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition), transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.send-btn:hover {
+  background: var(--accent-hover);
+}
+
+.send-btn:active {
+  transform: scale(0.98);
+}
+
+.send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.send-btn svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .send-btn span { display: none; }
+  .send-btn { padding: 0 1rem; }
+}

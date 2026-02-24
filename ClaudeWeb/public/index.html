@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="dark">
+  <div class="app">
+    <header class="header">
+      <div class="logo">
+        <h1>Claude AI</h1>
+      </div>
+      <p class="hello-user" id="helloUser">Hello, <span id="userName">…</span></p>
+      <button type="button" class="theme-toggle" aria-label="Changer le thème" title="Mode clair / sombre">
+        <span class="theme-icon sun">☀</span>
+        <span class="theme-icon moon">☽</span>
+      </button>
+    </header>
+
+    <main class="chat">
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <p>Envoyez un message pour démarrer la conversation avec Claude.</p>
+        </div>
+      </div>
+
+      <form class="input-area" id="form" autocomplete="off">
+        <textarea
+          id="input"
+          rows="1"
+          placeholder="Écrivez votre message…"
+          maxlength="10000"
+        ></textarea>
+        <button type="submit" class="send-btn" id="sendBtn" aria-label="Envoyer">
+          <span>Envoyer</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+          </svg>
+        </button>
+      </form>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
