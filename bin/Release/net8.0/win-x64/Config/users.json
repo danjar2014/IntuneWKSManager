@@ -1,0 +1,75 @@
+{
+  "PrimaryAdmins": [
+    {
+      "Id": "1",
+      "Email": "admin@yourdomain.com",
+      "DisplayName": "Administrateur Principal",
+      "AzureObjectId": "",
+      "IsActive": true,
+      "CreatedAt": "2025-01-01T00:00:00Z"
+    }
+  ],
+  "SecondaryAdmins": [
+    {
+      "Id": "2",
+      "Email": "operator@yourdomain.com",
+      "DisplayName": "Opérateur IT",
+      "AzureObjectId": "",
+      "Role": "Operator",
+      "IsActive": true,
+      "IsApproved": true,
+      "ApprovedBy": "admin@yourdomain.com",
+      "ApprovedAt": "2025-01-01T00:00:00Z",
+      "CreatedAt": "2025-01-01T00:00:00Z",
+      "LastLogin": null,
+      "AllowedFeatures": ["device-management", "user-management"],
+      "AllowedActions": ["devices.read", "devices.sync", "users.read"],
+      "AssignedClients": ["client-1"]
+    }
+  ],
+  "Roles": [
+    {
+      "Name": "FullAdmin",
+      "Description": "Administration complète (admins secondaires)",
+      "Permissions": [
+        "devices.read", "devices.write", "devices.wipe", "devices.sync", "devices.restart", "devices.retire",
+        "users.read", "apps.read", "apps.assign", "policies.read", "reports.read", "reports.export"
+      ]
+    },
+    {
+      "Name": "Operator",
+      "Description": "Opérations courantes sur les appareils",
+      "Permissions": [
+        "devices.read", "devices.sync", "devices.restart",
+        "users.read", "apps.read", "policies.read", "reports.read"
+      ]
+    },
+    {
+      "Name": "Viewer",
+      "Description": "Consultation uniquement",
+      "Permissions": [
+        "devices.read", "users.read", "apps.read", "policies.read", "reports.read"
+      ]
+    },
+    {
+      "Name": "Custom",
+      "Description": "Permissions personnalisées",
+      "Permissions": []
+    }
+  ],
+  "AvailablePermissions": [
+    { "Code": "devices.read", "Name": "Lire les appareils", "Category": "Appareils", "Description": "Voir la liste des appareils et leurs détails" },
+    { "Code": "devices.write", "Name": "Modifier les appareils", "Category": "Appareils", "Description": "Modifier les propriétés des appareils" },
+    { "Code": "devices.wipe", "Name": "Effacer les appareils", "Category": "Appareils", "Description": "Effacement à distance (action critique)" },
+    { "Code": "devices.sync", "Name": "Synchroniser les appareils", "Category": "Appareils", "Description": "Forcer la synchronisation Intune" },
+    { "Code": "devices.restart", "Name": "Redémarrer les appareils", "Category": "Appareils", "Description": "Redémarrage à distance" },
+    { "Code": "devices.retire", "Name": "Retirer les appareils", "Category": "Appareils", "Description": "Mise hors service (action critique)" },
+    { "Code": "users.read", "Name": "Lire les utilisateurs", "Category": "Utilisateurs", "Description": "Voir les utilisateurs Azure AD" },
+    { "Code": "apps.read", "Name": "Lire les applications", "Category": "Applications", "Description": "Voir les applications Intune" },
+    { "Code": "apps.assign", "Name": "Assigner les applications", "Category": "Applications", "Description": "Assigner des apps aux appareils/groupes" },
+    { "Code": "policies.read", "Name": "Lire les politiques", "Category": "Politiques", "Description": "Voir les politiques de conformité" },
+    { "Code": "reports.read", "Name": "Consulter les rapports", "Category": "Rapports", "Description": "Accéder aux rapports" },
+    { "Code": "reports.export", "Name": "Exporter les rapports", "Category": "Rapports", "Description": "Télécharger les rapports" }
+  ],
+  "PendingRequests": []
+}

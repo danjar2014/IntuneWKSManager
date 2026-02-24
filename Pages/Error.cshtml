@@ -1,0 +1,76 @@
+@page
+@{
+    Layout = null;
+    ViewData["Title"] = "Erreur";
+}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IntuneWksManager - Erreur</title>
+    <base href="@Url.Content("~/")" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .error-container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 500px;
+        }
+        .error-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+        .error-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .error-message {
+            color: rgba(255,255,255,0.8);
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+        .error-link {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #0078d4;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .error-link:hover {
+            background: #106ebe;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-icon">⚠️</div>
+        <h1 class="error-title">Une erreur s'est produite</h1>
+        <p class="error-message">
+            @if (!string.IsNullOrEmpty(Request.Query["message"].FirstOrDefault()))
+            {
+                <strong>Détail (diagnostic) :</strong><br />
+                @Request.Query["message"].FirstOrDefault()
+            }
+            else
+            {
+                @:Désolé, une erreur inattendue s'est produite. L'équipe technique a été notifiée.
+            }
+        </p>
+        <a href="~/Index" class="error-link">Retour à l'accueil</a>
+    </div>
+</body>
+</html>

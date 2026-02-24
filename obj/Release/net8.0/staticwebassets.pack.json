@@ -1,0 +1,49 @@
+{
+  "Files": [
+    {
+      "Id": "C:\\IntuneWksManager\\IntuneWksManager\\wwwroot\\css\\style.css",
+      "PackagePath": "staticwebassets\\css\\style.css"
+    },
+    {
+      "Id": "C:\\IntuneWksManager\\IntuneWksManager\\wwwroot\\js\\admin.js",
+      "PackagePath": "staticwebassets\\js\\admin.js"
+    },
+    {
+      "Id": "C:\\IntuneWksManager\\IntuneWksManager\\wwwroot\\js\\app.js",
+      "PackagePath": "staticwebassets\\js\\app.js"
+    },
+    {
+      "Id": "C:\\IntuneWksManager\\IntuneWksManager\\wwwroot\\js\\icons.js",
+      "PackagePath": "staticwebassets\\js\\icons.js"
+    },
+    {
+      "Id": "C:\\IntuneWksManager\\IntuneWksManager\\wwwroot\\js\\operator.js",
+      "PackagePath": "staticwebassets\\js\\operator.js"
+    },
+    {
+      "Id": "C:\\IntuneWksManager\\IntuneWksManager\\wwwroot\\js\\setup.js",
+      "PackagePath": "staticwebassets\\js\\setup.js"
+    },
+    {
+      "Id": "C:\\IntuneWksManager\\IntuneWksManager\\wwwroot\\js\\theme.js",
+      "PackagePath": "staticwebassets\\js\\theme.js"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.IntuneWksManager.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.build.IntuneWksManager.props",
+      "PackagePath": "build\\IntuneWksManager.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.IntuneWksManager.props",
+      "PackagePath": "buildMultiTargeting\\IntuneWksManager.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.buildTransitive.IntuneWksManager.props",
+      "PackagePath": "buildTransitive\\IntuneWksManager.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

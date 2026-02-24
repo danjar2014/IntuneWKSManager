@@ -1,0 +1,48 @@
+{
+  "Portal": {
+    "Name": "IntuneWksManager",
+    "Title": "Intune Workstation Manager",
+    "Version": "1.0.0",
+    "Logo": "/images/logo.png",
+    "Theme": {
+      "PrimaryColor": "#0078d4",
+      "SecondaryColor": "#106ebe",
+      "AccentColor": "#00bcf2",
+      "DarkMode": false,
+      "CustomCss": ""
+    },
+    "SessionTimeout": 30,
+    "MaxLoginAttempts": 5,
+    "LockoutDuration": 15,
+    "EnableAuditLog": true,
+    "DefaultLanguage": "fr-FR"
+  },
+  "GraphApi": {
+    "BaseUrl": "https://graph.microsoft.com/v1.0",
+    "BetaUrl": "https://graph.microsoft.com/beta",
+    "Scopes": [
+      "DeviceManagementManagedDevices.ReadWrite.All",
+      "DeviceManagementConfiguration.ReadWrite.All",
+      "DeviceManagementApps.ReadWrite.All",
+      "User.Read.All",
+      "Directory.Read.All"
+    ],
+    "RequestTimeout": 30,
+    "MaxRetries": 3,
+    "UseBetaEndpoint": false
+  },
+  "Notifications": {
+    "EnableEmail": false,
+    "SmtpServer": "",
+    "SmtpPort": 587,
+    "SmtpUser": "",
+    "SmtpPassword": "",
+    "FromAddress": "noreply@intunewksmanager.local",
+    "AdminEmails": []
+  },
+  "Maintenance": {
+    "IsEnabled": false,
+    "Message": "Le portail est en maintenance. Merci de revenir plus tard.",
+    "AllowAdminAccess": true
+  }
+}

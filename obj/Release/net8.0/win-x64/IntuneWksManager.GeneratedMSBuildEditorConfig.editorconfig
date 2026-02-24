@@ -1,0 +1,35 @@
+is_global = true
+build_property.TargetFramework = net8.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = IntuneWksManager
+build_property.RootNamespace = IntuneWksManager
+build_property.ProjectDir = C:\IntuneWksManager\IntuneWksManager\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 8.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = C:\IntuneWksManager\IntuneWksManager
+build_property._RazorSourceGeneratorDebug = 
+
+[C:/IntuneWksManager/IntuneWksManager/Pages/AccessRequest.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQWNjZXNzUmVxdWVzdC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/IntuneWksManager/IntuneWksManager/Pages/Admin.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQWRtaW4uY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/IntuneWksManager/IntuneWksManager/Pages/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/IntuneWksManager/IntuneWksManager/Pages/Operator.cshtml]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcT3BlcmF0b3IuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 

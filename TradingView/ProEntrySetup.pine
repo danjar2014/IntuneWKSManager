@@ -1,0 +1,902 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0
+// © Pro Entry Setup — Stratégie 1m/5m, SMA 20/200, FVG, OB+/OB-, niveaux STABLES
+
+//@version=6
+// Fusion Pro Entry Setup + Super OrderBlock/FVG/BoS Tools (RJB, FVG structure-breaking, BoS boxes, pivots lignes, mitigation)
+indicator("Pro Entry Setup — FVG/OB SMA", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=150, max_polylines_count=100)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POSITION & TIMEFRAME (petits montants type 100€, 0.02 lot Gold)
+// ═══════════════════════════════════════════════════════════════════════════
+grpSize = "💰 Position"
+capitalEur = input.float(100.0, "Capital (€)", minval=1.0, group=grpSize)
+volumeLots = input.float(0.02, "Volume (lots) ex: 0.02 Gold", minval=0.01, step=0.01, group=grpSize)
+useHigherTF = input.bool(true, "Filtrer tendance sur TF supérieur (5m si 1m)", group=grpSize)
+higherTF = input.string("5", "TF tendance (1/3/5/15)", options=["1", "3", "5", "15"], group=grpSize)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INDICATEURS — Tendance, SMA, ATR, Pivots
+// ═══════════════════════════════════════════════════════════════════════════
+grpInd = "📊 Indicateurs"
+trendType = input.string("Réactif", "Tendance", options=["Réactif", "Strict"], group=grpInd, tooltip="Réactif: prix vs SMA 20 (détecte mieux). Strict: SMA20 > SMA200.")
+sma20Len = input.int(20, "SMA 20", minval=1, group=grpInd)
+sma200Len = input.int(200, "SMA 200 (Strict)", minval=1, group=grpInd)
+atrLen = input.int(14, "ATR", minval=5, group=grpInd)
+pivotLen = input.int(3, "Pivots (barres) — plus bas = plus proche du prix", minval=2, maxval=15, group=grpInd)
+swingLookback = input.int(10, "Swing lookback (barres) — structure récente", minval=5, maxval=50, group=grpInd)
+atrMultTP = input.float(2.0, "ATR × TP (fallback)", minval=0.5, step=0.5, group=grpInd)
+atrMultSL = input.float(1.0, "ATR × SL (fallback)", minval=0.25, step=0.25, group=grpInd)
+// TP multiples (en R = risk)
+tp1R = input.float(1.0, "TP1 (× R)", minval=0.25, step=0.25, group=grpInd)
+tp2R = input.float(2.0, "TP2 (× R)", minval=0.25, step=0.25, group=grpInd)
+tp3R = input.float(3.0, "TP3 (× R)", minval=0.25, step=0.25, group=grpInd)
+tp4R = input.float(4.0, "TP4 (× R)", minval=0.25, step=0.25, group=grpInd)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIBONACCI & OTE (Optimal Trade Entry) — choix précis Entrée / SL / TP
+// ═══════════════════════════════════════════════════════════════════════════
+grpFib = "📐 Fibonacci & OTE"
+// Mode: Auto = OTE si la zone FVG/OB chevauche la zone OTE (61.8%-78.6%), sinon FVG/OB
+oteMode = input.string("Auto", "Mode entrée / SL", options=["Auto", "Toujours OTE", "Jamais OTE (FVG/OB)"], group=grpFib)
+showFibLevels = input.bool(true, "Afficher niveaux Fib (0.236 … 0.786)", group=grpFib)
+showOTEZone = input.bool(true, "Afficher zone OTE (boîte)", group=grpFib)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FVG, ORDER BLOCKS, BOS & CHoCH
+// ═══════════════════════════════════════════════════════════════════════════
+grpFVG = "📐 FVG & Order Blocks & Structure"
+useFVG = input.bool(true, "Utiliser FVG (Fair Value Gap) + / -", group=grpFVG)
+useOB = input.bool(true, "Utiliser OB+ / OB- (Order Blocks)", group=grpFVG)
+useBOS = input.bool(true, "Utiliser BOS (Break of Structure)", group=grpFVG)
+useCHoCH = input.bool(true, "Utiliser CHoCH (Change of Character)", group=grpFVG)
+obImpulseMin = input.float(0.5, "OB impulsion min (× ATR)", minval=0.2, step=0.1, group=grpFVG)
+obLookbackBOS = input.int(5, "OB avant BOS: barres à scanner (grand OB)", minval=1, maxval=15, group=grpFVG)
+showBlockLabels = input.bool(true, "Écrire le type sur les blocs (FVG+, OB-, RJB…)", group=grpFVG)
+showBOSCHOCHLabels = input.bool(true, "Afficher labels BOS / CHOCH", group=grpFVG, tooltip="Labels à chaque cassure de structure (indépendant du texte sur les boxes).")
+showCHoCHLine = input.bool(true, "Tracer ligne niveau cassé (BOS/CHOCH)", group=grpFVG, tooltip="Ligne horizontale au niveau du pivot cassé à chaque BOS ou CHOCH.")
+chochLineExtend = input.int(80, "Prolongation ligne (barres)", minval=20, maxval=200, group=grpFVG)
+fvgMaxBoxSet = input.int(50, "FVG : max boxes (tableau)", minval=5, maxval=100, group=grpFVG)
+obMaxBoxSet = input.int(50, "OB : max boxes (tableau)", minval=5, maxval=100, group=grpFVG)
+plotPPDD = input.bool(true, "PPDD (triangles + X sur pivots)", group=grpFVG, tooltip="Premium Premium / Discount Discount : triangle et X au test des pivots.")
+ppddBullColor = input.color(color.new(#4CAF50, 0), "PPDD haussier (triangle/X)", inline="ppdd", group=grpFVG)
+ppddBearColor = input.color(color.new(#F44336, 0), "PPDD baissier (triangle/X)", inline="ppdd", group=grpFVG)
+plotOBFVG = input.bool(true, "OB+FVG empilé (losanges)", group=grpFVG, tooltip="Losange quand FVG et OB sur la même barre.")
+useOBFVGStack = input.bool(true, "Utiliser OB+FVG empilé comme trigger entrée", group=grpFVG)
+obfvgBullColor = input.color(color.new(#4CAF50, 0), "OB+FVG haussier", inline="obfvg", group=grpFVG)
+obfvgBearColor = input.color(color.new(#F44336, 0), "OB+FVG baissier", inline="obfvg", group=grpFVG)
+usePPDDConfluence = input.bool(true, "Utiliser PPDD en confluence (triangle/X)", group=grpFVG)
+// FVG structure-breaking + mitigation (Super OrderBlock)
+plotStructureBreakingFVG = input.bool(true, "FVG qui casse la structure (couleur dédiée)", group=grpFVG, tooltip="FVG au test du pivot = couleur structure-breaking.")
+fvgStructBreakingColor = input.color(color.new(#2196F3, 85), "Couleur FVG structure-breaking", group=grpFVG)
+filterMitOB = input.bool(false, "Couleur OB mitigé", group=grpFVG, tooltip="Quand le prix a touché la zone OB.")
+mitOBColor = input.color(color.new(color.gray, 90), "Couleur OB mitigé", group=grpFVG)
+filterMitFVG = input.bool(false, "Couleur FVG mitigé", group=grpFVG)
+mitFVGColor = input.color(color.new(color.gray, 90), "Couleur FVG mitigé", group=grpFVG)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RJB (Rejection Blocks) — Super OrderBlock
+// ═══════════════════════════════════════════════════════════════════════════
+grpRJB = "📐 Rejection Blocks (RJB)"
+plotRJB = input.bool(false, "Afficher RJB", group=grpRJB)
+rjbBullColor = input.color(color.new(#4CAF50, 90), "RJB haussier", group=grpRJB)
+rjbBearColor = input.color(color.new(#F44336, 90), "RJB baissier", group=grpRJB)
+rjbBoxBorder = input.string(line.style_solid, "Bordure", options=[line.style_dashed, line.style_dotted, line.style_solid], group=grpRJB)
+rjbBorderTransparency = input.int(80, "Transparence bordure", minval=0, maxval=100, group=grpRJB)
+rjbMaxBoxSet = input.int(10, "Max RJB affichés", minval=1, maxval=100, group=grpRJB)
+filterMitRJB = input.bool(false, "Couleur RJB mitigé", group=grpRJB)
+mitRJBColor = input.color(color.new(color.gray, 90), "Couleur RJB mitigé", group=grpRJB)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BoS en boxes (zone pivot à la cassure) — Super OrderBlock
+// ═══════════════════════════════════════════════════════════════════════════
+grpBoSBox = "📐 BoS en boxes (zone pivot)"
+plotBOSBoxes = input.bool(false, "Afficher boxes BoS (zone pivot)", group=grpBoSBox, tooltip="Boîte pivot high/low à chaque cassure.")
+useHighLowForBullishBoS = input.bool(false, "High pour BoS haussier (au lieu de close)", group=grpBoSBox)
+useHighLowForBearishBoS = input.bool(false, "Low pour BoS baissier (au lieu de close)", group=grpBoSBox)
+bosBoxFlag = input.bool(false, "Longueur box BoS fixe (barres)", group=grpBoSBox)
+bosBoxLength = input.int(3, "Barres", minval=1, maxval=5, group=grpBoSBox)
+bosBullColor = input.color(color.new(#4CAF50, 90), "BoS haussier", group=grpBoSBox)
+bosBearColor = input.color(color.new(#F44336, 90), "BoS baissier", group=grpBoSBox)
+bosBoxBorder = input.string(line.style_solid, "Bordure", options=[line.style_dashed, line.style_dotted, line.style_solid], group=grpBoSBox)
+bosBorderTransparency = input.int(80, "Transparence bordure", minval=0, maxval=100, group=grpBoSBox)
+bosMaxBoxSet = input.int(10, "Max boxes BoS", minval=1, maxval=100, group=grpBoSBox)
+
+// ——— Box Types & Arrays (référence script) ———
+var int _ob   = 1
+var int _fvg  = 2
+var int _rjb  = 3
+var int _bos  = 4
+var string _obLabel   = "OB"
+var string _fvgLabel  = "FVG"
+var string _rjbLabel  = "RJB"
+var string _bosLabel  = "BoS"
+var string _plus      = "+"
+var string _minus     = "-"
+var string _empty     = ""
+var box[] _bearBoxesOB   = array.new_box()
+var box[] _bullBoxesOB   = array.new_box()
+var box[] _bearBoxesFVG  = array.new_box()
+var box[] _bullBoxesFVG  = array.new_box()
+var box[] _bearBoxesRJB  = array.new_box()
+var box[] _bullBoxesRJB  = array.new_box()
+var box[] _bearBoxesBOS  = array.new_box()
+var box[] _bullBoxesBOS  = array.new_box()
+
+// ——— Détection OB / FVG (référence script) ———
+isUp(idx) => close[idx] > open[idx]
+isDown(idx) => close[idx] < open[idx]
+isObUp(idx) => isDown(idx + 1) and isUp(idx) and close[idx] > high[idx + 1]
+isObDown(idx) => isUp(idx + 1) and isDown(idx) and close[idx] < low[idx + 1]
+isFvgUp(idx) => low[idx] > high[idx + 2]
+isFvgDown(idx) => high[idx] < low[idx + 2]
+
+// ——— Prolongation boxes : bord droit +1 barre sauf si zone mitigée ; couleur mitigé si option ———
+_controlBox(_boxes, _high, _low, _type) =>
+    if array.size(_boxes) > 0
+        for i = array.size(_boxes) - 1 to 0 by 1
+            _box = array.get(_boxes, i)
+            _boxLow = box.get_bottom(_box)
+            _boxHigh = box.get_top(_box)
+            _boxRight = box.get_right(_box)
+            _mitigated = (_high > _boxLow and _low < _boxLow) or (_high > _boxHigh and _low < _boxHigh)
+            if _type == _bos and bosBoxFlag
+                // box BoS longueur fixe : ne pas prolonger
+                na
+            else if (filterMitOB and _type == _ob) or (filterMitFVG and _type == _fvg) or (filterMitRJB and _type == _rjb)
+                if bar_index == _boxRight and not _mitigated
+                    box.set_right(_box, bar_index + 1)
+                else if _mitigated
+                    if _type == _ob
+                        box.set_bgcolor(_box, mitOBColor)
+                        box.set_border_color(_box, mitOBColor)
+                    else if _type == _fvg
+                        box.set_bgcolor(_box, mitFVGColor)
+                        box.set_border_color(_box, mitFVGColor)
+                    else if _type == _rjb
+                        box.set_bgcolor(_box, mitRJBColor)
+                        box.set_border_color(_box, mitRJBColor)
+            else
+                if bar_index == _boxRight and not _mitigated
+                    box.set_right(_box, bar_index + 1)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODE NIVEAUX — Dynamique (tout suit la structure) ou Stable (verrouillé au setup)
+// ═══════════════════════════════════════════════════════════════════════════
+grpStable = "🔒 Niveaux"
+levelMode = input.string("Dynamique", "Mode", options=["Dynamique", "Stable"], group=grpStable, tooltip="Dynamique: entrée/SL/TP et zone OTE mis à jour à chaque nouvelle structure (tous TF). Stable: verrouillage au setup.")
+barsBeforeNewSetup = input.int(30, "Barres min avant nouveau setup (Stable)", minval=5, maxval=200, group=grpStable)
+resetOnTrendChange = input.bool(true, "Réinitialiser au changement de tendance (Stable)", group=grpStable)
+slBufferATR = input.float(0.3, "SL buffer (× ATR) — marge anti-wick", minval=0.0, step=0.1, group=grpStable)
+slMinBelowZoneATR = input.float(0.7, "SL min sous/sur zone (× ATR) — éviter SL direct", minval=0.3, step=0.1, group=grpStable)
+requireRetest = input.bool(true, "Exiger retest zone (FVG/OB) avant entrée", group=grpStable, tooltip="Entrée seulement quand le prix revient dans la zone (plus précis, moins de SL direct).")
+maxSlDistATR = input.float(2.0, "SL max distance (× ATR) — garder proche du trade", minval=0.5, step=0.25, group=grpStable)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFLUENCE — Stochastique, VWAP, Ichimoku (reco 2026)
+// ═══════════════════════════════════════════════════════════════════════════
+grpConf = "🎯 Confluence (précision)"
+useStoch = input.bool(true, "Stochastique (surachat/survente)", group=grpConf)
+stochLen = input.int(14, "Stoch période", minval=5, group=grpConf)
+stochOverbought = input.int(80, "Surachat (>)", minval=70, group=grpConf)
+stochOversold = input.int(20, "Survente (<)", maxval=30, group=grpConf)
+useVWAP = input.bool(true, "VWAP (institutions)", group=grpConf)
+useIchimoku = input.bool(false, "Ichimoku (nuage + Tenkan/Kijun)", group=grpConf)
+ichimokuTenkan = input.int(9, "Ichimoku Tenkan", minval=1, group=grpConf)
+ichimokuKijun = input.int(26, "Ichimoku Kijun", minval=1, group=grpConf)
+minConfluence = input.int(1, "Min indicateurs confluence (1 = au moins 1)", minval=1, maxval=4, group=grpConf)
+showPivotLevels = input.bool(true, "Plot pivots High / Low (niveaux)", group=grpConf)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STYLE
+// ═══════════════════════════════════════════════════════════════════════════
+grpStyle = "🎨 Style"
+showSMA = input.bool(true, "Afficher SMA 20 / 200", group=grpStyle)
+showFVGBox = input.bool(true, "Afficher zones FVG", group=grpStyle)
+showOBBox = input.bool(true, "Afficher Order Blocks", group=grpStyle)
+showPivotLines = input.bool(true, "Lignes pivot High/Low (niveaux)", group=grpStyle, tooltip="Lignes horizontales au dernier pivot.")
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HIGH VOLUME BAR (HVB)
+// ═══════════════════════════════════════════════════════════════════════════
+grpHVB = "📊 High Volume Bar"
+plotHVB = input.bool(true, "Afficher HVB", group=grpHVB, tooltip="Barre dont le volume est nettement au-dessus de la moyenne récente.")
+hvbBullColor = input.color(color.new(#2196F3, 0), "HVB haussière", inline="hvbColor", group=grpHVB)
+hvbBearColor = input.color(color.new(#FF9800, 0), "HVB baissière", inline="hvbColor", group=grpHVB)
+hvbEMAPeriod = input.int(12, "Période EMA volume", minval=1, group=grpHVB)
+hvbMultiplier = input.float(1.5, "Multiplicateur volume", minval=1.0, maxval=100.0, step=0.1, group=grpHVB)
+
+// ——— SMA & ATR ———
+sma20 = ta.sma(close, sma20Len)
+sma200 = ta.sma(close, sma200Len)
+atr = ta.atr(atrLen)
+plot(showSMA ? sma20 : na, "SMA 20", color=color.new(#2196F3, 0), linewidth=2)
+plot(showSMA ? sma200 : na, "SMA 200", color=color.new(#FF9800, 0), linewidth=2)
+
+// ——— High Volume Bar (HVB) : colorer les barres à volume élevé ———
+float volEMA = ta.ema(volume, hvbEMAPeriod)
+bool isHVB = not na(volEMA) and volume >= hvbMultiplier * volEMA
+bool hvbBull = plotHVB and isHVB and close > open
+bool hvbBear = plotHVB and isHVB and close < open
+barcolor(hvbBull ? hvbBullColor : hvbBear ? hvbBearColor : na)
+
+// ——— Confluence : Stochastique ———
+float stochK = ta.stoch(close, high, low, stochLen)
+float stochD = ta.sma(stochK, 3)
+bool stochOversoldZone = stochK < stochOversold
+bool stochOverboughtZone = stochK > stochOverbought
+bool stochBullCross = ta.crossover(stochK, stochD)
+bool stochBearCross = ta.crossunder(stochK, stochD)
+bool stochFavorsLong = useStoch ? (stochOversoldZone or (stochK > stochOversold and stochK < 50 and stochBullCross)) : true
+bool stochFavorsShort = useStoch ? (stochOverboughtZone or (stochK < stochOverbought and stochK > 50 and stochBearCross)) : true
+
+// ——— Confluence : VWAP (session) ———
+var float sumPV = 0.0
+var float sumV = 0.0
+var float vwapLine = na
+float sessionChange = ta.change(time("D"))
+bool newSession = not na(sessionChange) and sessionChange != 0
+if newSession
+    sumPV := (high + low + close) / 3.0 * volume
+    sumV := volume
+else
+    sumPV := sumPV + (high + low + close) / 3.0 * volume
+    sumV := sumV + volume
+if not na(sumV) and sumV != 0
+    vwapLine := sumPV / sumV
+bool priceAboveVWAP = useVWAP ? (na(vwapLine) ? true : close > vwapLine) : true
+bool priceBelowVWAP = useVWAP ? (na(vwapLine) ? true : close < vwapLine) : true
+
+// ——— Confluence : Ichimoku (nuage + Tenkan/Kijun) ———
+float tenkan = (ta.highest(high, ichimokuTenkan) + ta.lowest(low, ichimokuTenkan)) / 2
+float kijun = (ta.highest(high, ichimokuKijun) + ta.lowest(low, ichimokuKijun)) / 2
+float senkouA = (tenkan + kijun) / 2
+float senkouB = (ta.highest(high, 52) + ta.lowest(low, 52)) / 2
+float cloudTop = math.max(senkouA[ichimokuKijun], senkouB[ichimokuKijun])
+float cloudBot = math.min(senkouA[ichimokuKijun], senkouB[ichimokuKijun])
+bool priceAboveCloud = useIchimoku ? (close > cloudTop) : true
+bool priceBelowCloud = useIchimoku ? (close < cloudBot) : true
+bool ichimokuFavorsLong = useIchimoku ? (close > cloudTop and close > tenkan and close > kijun) : true
+bool ichimokuFavorsShort = useIchimoku ? (close < cloudBot and close < tenkan and close < kijun) : true
+plot(useVWAP and not na(vwapLine) ? vwapLine : na, "VWAP", color=color.new(#9C27B0, 0), linewidth=2)
+plot(useIchimoku ? cloudTop : na, "Ichimoku nuage haut", color=color.new(#4CAF50, 60), linewidth=1)
+plot(useIchimoku ? cloudBot : na, "Ichimoku nuage bas", color=color.new(#F44336, 60), linewidth=1)
+
+// ——— Tendance (TF actuel) : Réactif = prix vs SMA20 ; Strict = SMA20 > SMA200 ———
+bullishTrend = trendType == "Réactif" ? close > sma20 : (close > sma20 and sma20 > sma200)
+bearishTrend = trendType == "Réactif" ? close < sma20 : (close < sma20 and sma20 < sma200)
+
+// ——— Tendance TF supérieur (optionnel) ———
+[sma20HTF, sma200HTF] = request.security(syminfo.tickerid, higherTF, [ta.sma(close, sma20Len), ta.sma(close, sma200Len)], lookahead=barmerge.lookahead_off)
+bullishHTF = useHigherTF ? (trendType == "Réactif" ? close > sma20HTF : (close > sma20HTF and sma20HTF > sma200HTF)) : true
+bearishHTF = useHigherTF ? (trendType == "Réactif" ? close < sma20HTF : (close < sma20HTF and sma20HTF < sma200HTF)) : true
+
+// Tendance validée (TF actuel + HTF si activé)
+trendLong = bullishTrend and bullishHTF
+trendShort = bearishTrend and bearishHTF
+
+// ——— FVG (3 chandelles : [2]=gauche, [1]=milieu, [0]=droite) ———
+// Bullish FVG: gap entre high[2] et low[0] — zone = [fvgBullBot, fvgBullTop]
+bullishFVG = useFVG and low[0] > high[2]
+bearishFVG = useFVG and high[0] < low[2]
+float fvgBullTop = bullishFVG ? low[0] : na
+float fvgBullBot = bullishFVG ? high[2] : na
+float fvgBearTop = bearishFVG ? low[2] : na
+float fvgBearBot = bearishFVG ? high[0] : na
+
+// ——— Stockage FVG non comblés (pour retest uniquement) ———
+var float lastFvgBullTop = na
+var float lastFvgBullBot = na
+var float lastFvgBearTop = na
+var float lastFvgBearBot = na
+if bullishFVG and not na(fvgBullTop)
+    lastFvgBullTop := fvgBullTop
+    lastFvgBullBot := fvgBullBot
+if bearishFVG and not na(fvgBearTop)
+    lastFvgBearTop := fvgBearTop
+    lastFvgBearBot := fvgBearBot
+// FVG comblé = prix a traversé la zone → on efface
+if not na(lastFvgBullBot) and low < lastFvgBullBot
+    lastFvgBullTop := na
+    lastFvgBullBot := na
+if not na(lastFvgBearTop) and high > lastFvgBearTop
+    lastFvgBearTop := na
+    lastFvgBearBot := na
+// Prix dans la zone FVG (retest) ?
+bool priceInFvgBull = not na(lastFvgBullTop) and low <= lastFvgBullTop and high >= lastFvgBullBot
+bool priceInFvgBear = not na(lastFvgBearBot) and high >= lastFvgBearBot and low <= lastFvgBearTop
+// Signal FVG long/short : avec retest = seulement si prix dans la zone ; sans retest = à la formation
+bool fvgBullValid = useFVG and (requireRetest ? priceInFvgBull : bullishFVG)
+bool fvgBearValid = useFVG and (requireRetest ? priceInFvgBear : bearishFVG)
+// Niveaux FVG utilisés pour entrée (zone stockée si retest, sinon formation)
+float useFvgBullTop = requireRetest and not na(lastFvgBullTop) ? lastFvgBullTop : fvgBullTop
+float useFvgBullBot = requireRetest and not na(lastFvgBullBot) ? lastFvgBullBot : fvgBullBot
+float useFvgBearTop = requireRetest and not na(lastFvgBearTop) ? lastFvgBearTop : fvgBearTop
+float useFvgBearBot = requireRetest and not na(lastFvgBearBot) ? lastFvgBearBot : fvgBearBot
+
+// ——— BOS & CHoCH (après définition des pivots, voir plus bas) ———
+// Order Blocks classiques : dernière chandelle contre-tendance avant impulsion
+bullCandle = close[0] > open[0]
+bearCandle = close[0] < open[0]
+bodySize = math.abs(close[0] - open[0])
+strongBullImpulse = bullCandle and bodySize >= obImpulseMin * atr
+strongBearImpulse = bearCandle and bodySize >= obImpulseMin * atr
+bool obPlusImpulse = useOB and close[1] < open[1] and strongBullImpulse
+bool obMinusImpulse = useOB and close[1] > open[1] and strongBearImpulse
+float obPlusHigh = obPlusImpulse ? math.max(open[1], close[1]) : na
+float obPlusLow = obPlusImpulse ? math.min(open[1], close[1]) : na
+float obMinusHigh = obMinusImpulse ? math.max(open[1], close[1]) : na
+float obMinusLow = obMinusImpulse ? math.min(open[1], close[1]) : na
+
+// ——— Pivots pour TP et Fibonacci ———
+pivH = ta.pivothigh(high, pivotLen, pivotLen)
+pivL = ta.pivotlow(low, pivotLen, pivotLen)
+var float lastPivotHigh = na
+var float lastPivotLow = na
+var int lastPivotHighBar = 0
+var int lastPivotLowBar = 0
+if not na(pivH)
+    lastPivotHigh := pivH
+    lastPivotHighBar := bar_index - pivotLen
+if not na(pivL)
+    lastPivotLow := pivL
+    lastPivotLowBar := bar_index - pivotLen
+
+// ——— PPDD (pour confluence + affichage plus bas) ———
+float _top = lastPivotHigh
+float _bottom = lastPivotLow
+bool premiumPremium = plotPPDD and isObDown(0) and not na(_top) and ((math.max(high, high[1]) > _top and close < _top) or (not na(_top[1]) and math.max(high, high[1]) > _top[1] and close < _top[1]))
+bool discountDiscount = plotPPDD and isObUp(0) and not na(_bottom) and ((math.min(low, low[1]) < _bottom and close > _bottom) or (not na(_bottom[1]) and math.min(low, low[1]) < _bottom[1] and close > _bottom[1]))
+bool premiumPremiumWeak = plotPPDD and (isUp(1) and isDown(0) and close[0] < open[1]) and not na(_top) and ((math.max(high, high[1]) > _top and close < _top) or (not na(_top[1]) and math.max(high, high[1]) > _top[1] and close < _top[1])) and not premiumPremium
+bool discountDiscountWeak = plotPPDD and (isDown(1) and isUp(0) and close[0] > open[1]) and not na(_bottom) and ((math.min(low, low[1]) < _bottom and close > _bottom) or (not na(_bottom[1]) and math.min(low, low[1]) < _bottom[1] and close > _bottom[1])) and not discountDiscount
+
+// ——— Fibonacci retracement & OTE — sens du mouvement pour un Fib correct ———
+float highestSwing = ta.highest(high, swingLookback)
+float lowestSwing = ta.lowest(low, swingLookback)
+float swingHigh = na(lastPivotHigh) ? highestSwing : lastPivotHigh
+float swingLow = na(lastPivotLow) ? lowestSwing : lastPivotLow
+float swingRange = swingHigh - swingLow
+// Dernier pivot le plus récent = sens du swing : high récent → downtrend (short OTE), low récent → uptrend (long OTE)
+// Si aucun pivot encore : on estime par la position du prix (milieu du range)
+bool lastSwingWasDown = lastPivotHighBar > lastPivotLowBar or (lastPivotHighBar == 0 and lastPivotLowBar == 0 and close > (swingHigh + swingLow) / 2)
+bool lastSwingWasUp = lastPivotLowBar > lastPivotHighBar or (lastPivotHighBar == 0 and lastPivotLowBar == 0 and close <= (swingHigh + swingLow) / 2)
+
+// LONG OTE : retracement d’un MOUVEMENT HAUSSIER (low → high). Zone 61.8%-78.6% depuis le HAUT.
+// Donc seulement si le dernier swing est haussier (low plus récent que high).
+float fib_236 = swingHigh - 0.236 * swingRange
+float fib_382 = swingHigh - 0.382 * swingRange
+float fib_500 = swingHigh - 0.5 * swingRange
+float fib_618 = swingHigh - 0.618 * swingRange
+float fib_786 = swingHigh - 0.786 * swingRange
+float oteTop = fib_618
+float oteBot = fib_786
+
+// SHORT OTE : retracement d’un MOUVEMENT BAISSIER (high → low). Zone 61.8%-78.6% depuis le BAS.
+// Donc seulement si le dernier swing est baisseur (high plus récent que low).
+float fib_618_s = swingLow + 0.618 * swingRange
+float fib_786_s = swingLow + 0.786 * swingRange
+float oteTopShort = fib_786_s
+float oteBotShort = fib_618_s
+
+// Zones OTE valides seulement dans le bon sens (éviter Fib inversé)
+bool oteLongValid = swingRange > 0 and lastSwingWasUp
+bool oteShortValid = swingRange > 0 and lastSwingWasDown
+
+// ——— BOS (Break of Structure) & CHoCH (Change of Character) ———
+bool crossOverClosePivotHigh = ta.crossover(close, lastPivotHigh)
+bool crossUnderClosePivotLow = ta.crossunder(close, lastPivotLow)
+bool bullBOS = useBOS and not na(lastPivotHigh) and crossOverClosePivotHigh
+bool bearBOS = useBOS and not na(lastPivotLow) and crossUnderClosePivotLow
+bool bullCHoCH = useCHoCH and bullBOS and lastSwingWasDown[1]
+bool bearCHoCH = useCHoCH and bearBOS and lastSwingWasUp[1]
+
+// ——— Order Block lié au BOS (grand OB = dernière chandelle contre-tendance avant le break) ———
+bool obPlusFromBOS = false
+bool obMinusFromBOS = false
+float obPlusHighBOS = na
+float obPlusLowBOS = na
+float obMinusHighBOS = na
+float obMinusLowBOS = na
+if useOB and bullBOS
+    if close[1] < open[1]
+        obPlusFromBOS := true
+        obPlusHighBOS := math.max(open[1], close[1])
+        obPlusLowBOS := math.min(open[1], close[1])
+    else if close[2] < open[2]
+        obPlusFromBOS := true
+        obPlusHighBOS := math.max(open[2], close[2])
+        obPlusLowBOS := math.min(open[2], close[2])
+    else if obLookbackBOS >= 3 and close[3] < open[3]
+        obPlusFromBOS := true
+        obPlusHighBOS := math.max(open[3], close[3])
+        obPlusLowBOS := math.min(open[3], close[3])
+    else if obLookbackBOS >= 4 and close[4] < open[4]
+        obPlusFromBOS := true
+        obPlusHighBOS := math.max(open[4], close[4])
+        obPlusLowBOS := math.min(open[4], close[4])
+    else if obLookbackBOS >= 5 and close[5] < open[5]
+        obPlusFromBOS := true
+        obPlusHighBOS := math.max(open[5], close[5])
+        obPlusLowBOS := math.min(open[5], close[5])
+if useOB and bearBOS
+    if close[1] > open[1]
+        obMinusFromBOS := true
+        obMinusHighBOS := math.max(open[1], close[1])
+        obMinusLowBOS := math.min(open[1], close[1])
+    else if close[2] > open[2]
+        obMinusFromBOS := true
+        obMinusHighBOS := math.max(open[2], close[2])
+        obMinusLowBOS := math.min(open[2], close[2])
+    else if obLookbackBOS >= 3 and close[3] > open[3]
+        obMinusFromBOS := true
+        obMinusHighBOS := math.max(open[3], close[3])
+        obMinusLowBOS := math.min(open[3], close[3])
+    else if obLookbackBOS >= 4 and close[4] > open[4]
+        obMinusFromBOS := true
+        obMinusHighBOS := math.max(open[4], close[4])
+        obMinusLowBOS := math.min(open[4], close[4])
+    else if obLookbackBOS >= 5 and close[5] > open[5]
+        obMinusFromBOS := true
+        obMinusHighBOS := math.max(open[5], close[5])
+        obMinusLowBOS := math.min(open[5], close[5])
+
+// OB+ / OB- final : impulsion OU BOS (priorité BOS = grand OB)
+bool obPlus = obPlusImpulse or obPlusFromBOS
+bool obMinus = obMinusImpulse or obMinusFromBOS
+if obPlusFromBOS
+    obPlusHigh := obPlusHighBOS
+    obPlusLow := obPlusLowBOS
+if obMinusFromBOS
+    obMinusHigh := obMinusHighBOS
+    obMinusLow := obMinusLowBOS
+
+// ——— Stockage OB non comblés (pour retest) ———
+var float lastObPlusHigh = na
+var float lastObPlusLow = na
+var float lastObMinusHigh = na
+var float lastObMinusLow = na
+if obPlus and not na(obPlusHigh)
+    lastObPlusHigh := obPlusHigh
+    lastObPlusLow := obPlusLow
+if obMinus and not na(obMinusHigh)
+    lastObMinusHigh := obMinusHigh
+    lastObMinusLow := obMinusLow
+if not na(lastObPlusLow) and low < lastObPlusLow
+    lastObPlusHigh := na
+    lastObPlusLow := na
+if not na(lastObMinusHigh) and high > lastObMinusHigh
+    lastObMinusHigh := na
+    lastObMinusLow := na
+bool priceInObPlus = not na(lastObPlusLow) and low <= lastObPlusHigh and high >= lastObPlusLow
+bool priceInObMinus = not na(lastObMinusLow) and high >= lastObMinusLow and low <= lastObMinusHigh
+bool obPlusValid = useOB and (requireRetest ? priceInObPlus : obPlus)
+bool obMinusValid = useOB and (requireRetest ? priceInObMinus : obMinus)
+float useObPlusHigh = requireRetest and not na(lastObPlusHigh) ? lastObPlusHigh : obPlusHigh
+float useObPlusLow = requireRetest and not na(lastObPlusLow) ? lastObPlusLow : obPlusLow
+float useObMinusHigh = requireRetest and not na(lastObMinusHigh) ? lastObMinusHigh : obMinusHigh
+float useObMinusLow = requireRetest and not na(lastObMinusLow) ? lastObMinusLow : obMinusLow
+
+// ——— Décision OTE ou FVG/OB : précis (zones actives FVG/OB) ———
+bool fvgBullOverlapsOTE = oteLongValid and fvgBullValid and not na(useFvgBullTop) and (useFvgBullBot <= oteTop and oteBot <= useFvgBullTop)
+bool fvgBearOverlapsOTE = oteShortValid and fvgBearValid and not na(useFvgBearTop) and (useFvgBearBot <= oteTopShort and oteBotShort <= useFvgBearTop)
+bool obPlusOverlapsOTE = oteLongValid and obPlusValid and not na(useObPlusHigh) and (useObPlusLow <= oteTop and oteBot <= useObPlusHigh)
+bool obMinusOverlapsOTE = oteShortValid and obMinusValid and not na(useObMinusHigh) and (useObMinusLow <= oteTopShort and oteBotShort <= useObMinusHigh)
+bool useOTELong = oteMode == "Toujours OTE" ? oteLongValid : (oteMode == "Jamais OTE (FVG/OB)" ? false : (fvgBullOverlapsOTE or obPlusOverlapsOTE))
+bool useOTEShort = oteMode == "Toujours OTE" ? oteShortValid : (oteMode == "Jamais OTE (FVG/OB)" ? false : (fvgBearOverlapsOTE or obMinusOverlapsOTE))
+bool useOTE = useOTELong or useOTEShort
+// ——— OTE : n'utiliser que si le prix a testé la zone (éviter entrée trop tôt) ———
+bool priceInOTELong = oteLongValid and low <= oteTop and high >= oteBot
+bool priceInOTEShort = oteShortValid and high >= oteBotShort and low <= oteTopShort
+bool useOTELongStrict = useOTELong and (requireRetest ? priceInOTELong : true)
+bool useOTEShortStrict = useOTEShort and (requireRetest ? priceInOTEShort : true)
+
+// Affichage des niveaux Fibonacci (en scope global, après définition de swingRange/fib_*)
+plot(showFibLevels and oteLongValid ? fib_236 : na, "Fib 0.236 Long", color=color.new(#9E9E9E, 50), linewidth=1)
+plot(showFibLevels and oteLongValid ? fib_382 : na, "Fib 0.382 Long", color=color.new(#9E9E9E, 50), linewidth=1)
+plot(showFibLevels and oteLongValid ? fib_500 : na, "Fib 0.5 Long", color=color.new(#9E9E9E, 30), linewidth=1)
+plot(showFibLevels and oteLongValid ? fib_618 : na, "Fib 0.618 OTE Long", color=color.new(#9C27B0, 20), linewidth=1)
+plot(showFibLevels and oteLongValid ? fib_786 : na, "Fib 0.786 OTE Long", color=color.new(#9C27B0, 0), linewidth=1)
+plot(showFibLevels and oteShortValid ? fib_618_s : na, "Fib 0.618 OTE Short", color=color.new(#E91E63, 20), linewidth=1)
+plot(showFibLevels and oteShortValid ? fib_786_s : na, "Fib 0.786 OTE Short", color=color.new(#E91E63, 0), linewidth=1)
+
+// ——— Pivots High / Low : cercles + lignes (niveaux) ———
+plotshape(showPivotLevels and not na(pivH) ? pivH : na, "Pivot High", shape.circle, location.absolute, color.new(#FF9800, 0), 0, size.small)
+plotshape(showPivotLevels and not na(pivL) ? pivL : na, "Pivot Low", shape.circle, location.absolute, color.new(#2196F3, 0), 0, size.small)
+plot(showPivotLines and not na(lastPivotHigh) ? lastPivotHigh : na, "Ligne Pivot High", color.new(#FF9800, 50), linewidth=1)
+plot(showPivotLines and not na(lastPivotLow) ? lastPivotLow : na, "Ligne Pivot Low", color.new(#2196F3, 50), linewidth=1)
+
+// ——— OB+FVG empilé comme trigger (confluence visuelle = signal) ———
+bool obFvgBullStack = useOBFVGStack and useFVG and useOB and isFvgUp(0) and isObUp(1)
+bool obFvgBearStack = useOBFVGStack and useFVG and useOB and isFvgDown(0) and isObDown(1)
+
+// ——— Calcul ENTRÉE / TP / SL / TP1-4 pour le setup actuel (candidat) ———
+float candEntry = na
+float candTP1 = na
+float candTP2 = na
+float candTP3 = na
+float candTP4 = na
+float candSL = na
+bool validLong = false
+bool validShort = false
+
+// SL marge sous/sur zone (éviter SL direct) : au moins slMinBelowZoneATR
+float slMarginLong = atr * math.max(slMinBelowZoneATR, 0.5 + slBufferATR)
+float slMarginShort = atr * math.max(slMinBelowZoneATR, 0.5 + slBufferATR)
+
+// Long: tendance haussière + (OB+FVG empilé OU FVG+ OU OB+ OU BOS/CHoCH)
+if trendLong
+    if obFvgBullStack
+        candEntry := useOTELongStrict ? oteBot : (low[0] + high[2]) / 2
+        candSL := useOTELongStrict ? swingLow - slMarginLong : high[2] - slMarginLong
+        float riskLongStack = candEntry - candSL
+        candTP1 := candEntry + tp1R * riskLongStack
+        candTP2 := candEntry + tp2R * riskLongStack
+        candTP3 := candEntry + tp3R * riskLongStack
+        candTP4 := candEntry + tp4R * riskLongStack
+        validLong := true
+    else if fvgBullValid and not na(useFvgBullTop)
+        candEntry := useOTELongStrict ? oteBot : (useFvgBullTop + useFvgBullBot) / 2
+        candSL := useOTELongStrict ? swingLow - slMarginLong : useFvgBullBot - slMarginLong
+        float riskLong = candEntry - candSL
+        candTP1 := candEntry + tp1R * riskLong
+        candTP2 := candEntry + tp2R * riskLong
+        candTP3 := candEntry + tp3R * riskLong
+        candTP4 := candEntry + tp4R * riskLong
+        validLong := true
+    else if obPlusValid and not na(useObPlusHigh)
+        candEntry := useOTELongStrict ? oteBot : (useObPlusHigh + useObPlusLow) / 2
+        candSL := useOTELongStrict ? swingLow - slMarginLong : useObPlusLow - slMarginLong
+        float riskLongOb = candEntry - candSL
+        candTP1 := candEntry + tp1R * riskLongOb
+        candTP2 := candEntry + tp2R * riskLongOb
+        candTP3 := candEntry + tp3R * riskLongOb
+        candTP4 := candEntry + tp4R * riskLongOb
+        validLong := true
+    else if bullBOS or bullCHoCH
+        candEntry := useOTELongStrict ? oteBot : (not na(lastPivotHigh) ? lastPivotHigh : close)
+        candSL := swingLow - slMarginLong
+        float riskLongBOS = candEntry - candSL
+        candTP1 := candEntry + tp1R * riskLongBOS
+        candTP2 := candEntry + tp2R * riskLongBOS
+        candTP3 := candEntry + tp3R * riskLongBOS
+        candTP4 := candEntry + tp4R * riskLongBOS
+        validLong := true
+
+// Short: tendance baissière + (OB+FVG empilé OU FVG- OU OB- OU BOS/CHoCH)
+if trendShort
+    if obFvgBearStack
+        candEntry := useOTEShortStrict ? oteTopShort : (low[2] + high[0]) / 2
+        candSL := useOTEShortStrict ? swingHigh + slMarginShort : high[0] + slMarginShort
+        float riskShortStack = candSL - candEntry
+        candTP1 := candEntry - tp1R * riskShortStack
+        candTP2 := candEntry - tp2R * riskShortStack
+        candTP3 := candEntry - tp3R * riskShortStack
+        candTP4 := candEntry - tp4R * riskShortStack
+        validShort := true
+    else if fvgBearValid and not na(useFvgBearTop)
+        candEntry := useOTEShortStrict ? oteTopShort : (useFvgBearTop + useFvgBearBot) / 2
+        candSL := useOTEShortStrict ? swingHigh + slMarginShort : useFvgBearTop + slMarginShort
+        float riskShort = candSL - candEntry
+        candTP1 := candEntry - tp1R * riskShort
+        candTP2 := candEntry - tp2R * riskShort
+        candTP3 := candEntry - tp3R * riskShort
+        candTP4 := candEntry - tp4R * riskShort
+        validShort := true
+    else if obMinusValid and not na(useObMinusHigh)
+        candEntry := useOTEShortStrict ? oteTopShort : (useObMinusHigh + useObMinusLow) / 2
+        candSL := useOTEShortStrict ? swingHigh + slMarginShort : useObMinusHigh + slMarginShort
+        float riskShortOb = candSL - candEntry
+        candTP1 := candEntry - tp1R * riskShortOb
+        candTP2 := candEntry - tp2R * riskShortOb
+        candTP3 := candEntry - tp3R * riskShortOb
+        candTP4 := candEntry - tp4R * riskShortOb
+        validShort := true
+    else if bearBOS or bearCHoCH
+        candEntry := useOTEShortStrict ? oteTopShort : (not na(lastPivotLow) ? lastPivotLow : close)
+        candSL := swingHigh + slMarginShort
+        float riskShortBOS = candSL - candEntry
+        candTP1 := candEntry - tp1R * riskShortBOS
+        candTP2 := candEntry - tp2R * riskShortBOS
+        candTP3 := candEntry - tp3R * riskShortBOS
+        candTP4 := candEntry - tp4R * riskShortBOS
+        validShort := true
+
+// ——— Confluence : exiger au moins minConfluence indicateurs favorables (+ PPDD) ———
+int confLong = (useStoch and stochFavorsLong ? 1 : 0) + (useVWAP and priceAboveVWAP ? 1 : 0) + (useIchimoku and ichimokuFavorsLong ? 1 : 0) + (trendLong ? 1 : 0) + (usePPDDConfluence and (discountDiscount or discountDiscountWeak) ? 1 : 0)
+int confShort = (useStoch and stochFavorsShort ? 1 : 0) + (useVWAP and priceBelowVWAP ? 1 : 0) + (useIchimoku and ichimokuFavorsShort ? 1 : 0) + (trendShort ? 1 : 0) + (usePPDDConfluence and (premiumPremium or premiumPremiumWeak) ? 1 : 0)
+bool filterLongByConf = validLong and confLong < minConfluence
+bool filterShortByConf = validShort and confShort < minConfluence
+if filterLongByConf
+    validLong := false
+if filterShortByConf
+    validShort := false
+
+bool usedOTEForSetup = (validLong and useOTELongStrict) or (validShort and useOTEShortStrict)
+
+// ——— Limiter la distance SL pour garder entrée/SL/TP proches du trade ———
+bool capLongSL = validLong and not na(candSL) and not na(candEntry) and (candEntry - candSL) > maxSlDistATR * atr
+if capLongSL
+    candSL := candEntry - maxSlDistATR * atr
+    float riskLongCap = candEntry - candSL
+    candTP1 := candEntry + tp1R * riskLongCap
+    candTP2 := candEntry + tp2R * riskLongCap
+    candTP3 := candEntry + tp3R * riskLongCap
+    candTP4 := candEntry + tp4R * riskLongCap
+bool capShortSL = validShort and not na(candSL) and not na(candEntry) and (candSL - candEntry) > maxSlDistATR * atr
+if capShortSL
+    candSL := candEntry + maxSlDistATR * atr
+    float riskShortCap = candSL - candEntry
+    candTP1 := candEntry - tp1R * riskShortCap
+    candTP2 := candEntry - tp2R * riskShortCap
+    candTP3 := candEntry - tp3R * riskShortCap
+    candTP4 := candEntry - tp4R * riskShortCap
+
+// ——— NIVEAUX STABLES : on ne met à jour que lors d'un nouveau setup valide ———
+var float savedEntry = na
+var float savedTP1 = na
+var float savedTP2 = na
+var float savedTP3 = na
+var float savedTP4 = na
+var float savedSL = na
+var bool savedLong = true
+var bool savedUsedOTE = false
+var int savedBar = 0
+// Zone OTE utilisée pour ce setup (pour tracer la boîte OTE au bon endroit = alignée entrée)
+var float savedOteTop = na
+var float savedOteBot = na
+
+bool newLongSetup = levelMode == "Stable" and validLong and (na(savedEntry) or (savedLong and bar_index - savedBar >= barsBeforeNewSetup) or (resetOnTrendChange and not savedLong))
+bool newShortSetup = levelMode == "Stable" and validShort and (na(savedEntry) or (not savedLong and bar_index - savedBar >= barsBeforeNewSetup) or (resetOnTrendChange and savedLong))
+
+if newLongSetup and validLong
+    savedEntry := candEntry
+    savedTP1 := candTP1
+    savedTP2 := candTP2
+    savedTP3 := candTP3
+    savedTP4 := candTP4
+    savedSL := candSL
+    savedLong := true
+    savedUsedOTE := usedOTEForSetup
+    savedBar := bar_index
+    savedOteTop := oteTop
+    savedOteBot := oteBot
+if newShortSetup and validShort
+    savedEntry := candEntry
+    savedTP1 := candTP1
+    savedTP2 := candTP2
+    savedTP3 := candTP3
+    savedTP4 := candTP4
+    savedSL := candSL
+    savedLong := false
+    savedUsedOTE := usedOTEForSetup
+    savedBar := bar_index
+    savedOteTop := oteTopShort
+    savedOteBot := oteBotShort
+
+// En mode Dynamique : barre courante ; en mode Stable : barre du setup verrouillé
+targetBar = levelMode == "Dynamique" ? bar_index : (na(savedEntry) ? bar_index : savedBar)
+extendRight = bar_index + 80
+
+// ——— Dernier affiché (mode Dynamique : garde en mémoire quand pas de setup) ———
+var float lastEntry = na
+var float lastTP1 = na
+var float lastTP2 = na
+var float lastTP3 = na
+var float lastTP4 = na
+var float lastSL = na
+var bool lastLong = true
+var bool lastUsedOTE = false
+if validLong or validShort
+    lastEntry := candEntry
+    lastTP1 := candTP1
+    lastTP2 := candTP2
+    lastTP3 := candTP3
+    lastTP4 := candTP4
+    lastSL := candSL
+    lastLong := validLong
+    lastUsedOTE := usedOTEForSetup
+
+bool useStable = levelMode == "Stable" and not na(savedEntry)
+float entry = useStable ? savedEntry : (validLong ? candEntry : validShort ? candEntry : na(lastEntry) ? close : lastEntry)
+float tp1 = useStable ? savedTP1 : (validLong ? candTP1 : validShort ? candTP1 : na(lastTP1) ? entry + atrMultTP * atr : lastTP1)
+float tp2 = useStable ? savedTP2 : (validLong ? candTP2 : validShort ? candTP2 : na(lastTP2) ? entry + atrMultTP * atr : lastTP2)
+float tp3 = useStable ? savedTP3 : (validLong ? candTP3 : validShort ? candTP3 : na(lastTP3) ? entry + atrMultTP * atr : lastTP3)
+float tp4 = useStable ? savedTP4 : (validLong ? candTP4 : validShort ? candTP4 : na(lastTP4) ? entry + atrMultTP * atr : lastTP4)
+float sl = useStable ? savedSL : (validLong ? candSL : validShort ? candSL : na(lastSL) ? entry - atrMultSL * atr : lastSL)
+bool isLong = useStable ? savedLong : (validLong ? true : validShort ? false : lastLong)
+bool displayUsedOTE = useStable ? savedUsedOTE : (validLong or validShort ? usedOTEForSetup : lastUsedOTE)
+float tp = tp2
+
+// Sécurité: TP1-4 et SL du bon côté (Long: TP au-dessus, SL en dessous)
+bool hasEntry = not na(entry)
+if isLong and hasEntry
+    if not na(sl) and sl >= entry
+        sl := entry - atrMultSL * atr
+    if not na(tp1) and tp1 <= entry
+        tp1 := entry + tp1R * (entry - sl)
+    if not na(tp2) and tp2 <= entry
+        tp2 := entry + tp2R * (entry - sl)
+    if not na(tp3) and tp3 <= entry
+        tp3 := entry + tp3R * (entry - sl)
+    if not na(tp4) and tp4 <= entry
+        tp4 := entry + tp4R * (entry - sl)
+if not isLong and hasEntry
+    if not na(sl) and sl <= entry
+        sl := entry + atrMultSL * atr
+    if not na(tp1) and tp1 >= entry
+        tp1 := entry - tp1R * (sl - entry)
+    if not na(tp2) and tp2 >= entry
+        tp2 := entry - tp2R * (sl - entry)
+    if not na(tp3) and tp3 >= entry
+        tp3 := entry - tp3R * (sl - entry)
+    if not na(tp4) and tp4 >= entry
+        tp4 := entry - tp4R * (sl - entry)
+tp := tp2
+
+// R:R
+risk = math.abs(entry - sl)
+reward = math.abs(tp - entry)
+rrRatio = risk > 0 ? reward / risk : 0.0
+
+// ——— Dessin FVG / OB : tableaux + _controlBox (prolongation jusqu’à mitigation) ———
+// FVG haussier : structure-breaking si casse pivot (couleur dédiée)
+bool fvgBullStructBreak = plotStructureBreakingFVG and useFVG and not na(lastPivotHigh) and close[1] > lastPivotHigh and low[1] < lastPivotHigh and high[2] < lastPivotHigh and low > lastPivotHigh
+if isFvgUp(0) and showFVGBox and useFVG
+    color fvgBullBg = fvgBullStructBreak ? fvgStructBreakingColor : color.new(#4CAF50, 85)
+    color fvgBullBorder = fvgBullStructBreak ? fvgStructBreakingColor : color.new(#4CAF50, 50)
+    _bullboxFVG = box.new(bar_index - 2, low[0], bar_index, high[2], border_color=fvgBullBorder, bgcolor=fvgBullBg, text=showBlockLabels ? _fvgLabel + _plus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bullBoxesFVG) > fvgMaxBoxSet
+        box.delete(array.shift(_bullBoxesFVG))
+    array.push(_bullBoxesFVG, _bullboxFVG)
+// FVG baissier : structure-breaking si casse pivot
+bool fvgBearStructBreak = plotStructureBreakingFVG and useFVG and not na(lastPivotLow) and close[1] < lastPivotLow and high[1] > lastPivotLow and low[2] > lastPivotLow and high < lastPivotLow
+if isFvgDown(0) and showFVGBox and useFVG
+    color fvgBearBg = fvgBearStructBreak ? fvgStructBreakingColor : color.new(#F44336, 85)
+    color fvgBearBorder = fvgBearStructBreak ? fvgStructBreakingColor : color.new(#F44336, 50)
+    _bearboxFVG = box.new(bar_index - 2, low[2], bar_index, high[0], border_color=fvgBearBorder, bgcolor=fvgBearBg, text=showBlockLabels ? _fvgLabel + _minus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bearBoxesFVG) > fvgMaxBoxSet
+        box.delete(array.shift(_bearBoxesFVG))
+    array.push(_bearBoxesFVG, _bearboxFVG)
+if showFVGBox and useFVG
+    _controlBox(_bearBoxesFVG, high, low, _fvg)
+    _controlBox(_bullBoxesFVG, high, low, _fvg)
+
+// OB haussier — même style que FVG (bordure 50, fond 85, vert)
+if isObUp(1) and showOBBox and useOB
+    box _bullboxOB = box.new(bar_index - 2, high[2], bar_index, math.min(low[2], low[1]), border_color=color.new(#4CAF50, 50), bgcolor=color.new(#4CAF50, 85), text=showBlockLabels ? _obLabel + _plus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bullBoxesOB) > obMaxBoxSet
+        box.delete(array.shift(_bullBoxesOB))
+    array.push(_bullBoxesOB, _bullboxOB)
+// OB baissier — même style que FVG (bordure 50, fond 85, rouge)
+if isObDown(1) and showOBBox and useOB
+    box _bearboxOB = box.new(bar_index - 2, math.max(high[2], high[1]), bar_index, low[2], border_color=color.new(#F44336, 50), bgcolor=color.new(#F44336, 85), text=showBlockLabels ? _obLabel + _minus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bearBoxesOB) > obMaxBoxSet
+        box.delete(array.shift(_bearBoxesOB))
+    array.push(_bearBoxesOB, _bearboxOB)
+if showOBBox and useOB
+    _controlBox(_bearBoxesOB, high, low, _ob)
+    _controlBox(_bullBoxesOB, high, low, _ob)
+
+// ——— RJB (Rejection Blocks) ———
+bool isDownRjbObCondition = isObDown(1)
+bool isDownRjb1 = isDownRjbObCondition and (high[1] < (close[2] + 0.2 * (high[2] - close[2])))
+bool isDownRjb2 = isDownRjbObCondition and (high[1] > high[2])
+if plotRJB and isDownRjb1
+    box _bearboxRJB = box.new(bar_index - 2, high[2], bar_index, close[2], bgcolor=rjbBearColor, border_color=color.new(rjbBearColor, rjbBorderTransparency), border_style=rjbBoxBorder, border_width=1, text=showBlockLabels ? _rjbLabel + _minus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bearBoxesRJB) > rjbMaxBoxSet
+        box.delete(array.shift(_bearBoxesRJB))
+    array.push(_bearBoxesRJB, _bearboxRJB)
+if plotRJB and isDownRjb2
+    box _bearboxRJB2 = box.new(bar_index - 1, high[1], bar_index, open[1], bgcolor=rjbBearColor, border_color=color.new(rjbBearColor, rjbBorderTransparency), border_style=rjbBoxBorder, border_width=1, text=showBlockLabels ? _rjbLabel + _minus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bearBoxesRJB) > rjbMaxBoxSet
+        box.delete(array.shift(_bearBoxesRJB))
+    array.push(_bearBoxesRJB, _bearboxRJB2)
+bool isUpRjbObCondition = isObUp(1)
+bool isUpRjb1 = isUpRjbObCondition and (low[1] > (close[2] - 0.2 * (close[2] - low[2])))
+bool isUpRjb2 = isUpRjbObCondition and (low[1] < low[2])
+if plotRJB and isUpRjb1
+    box _bullboxRJB = box.new(bar_index - 2, close[2], bar_index, low[2], bgcolor=rjbBullColor, border_color=color.new(rjbBullColor, rjbBorderTransparency), border_style=rjbBoxBorder, border_width=1, text=showBlockLabels ? _rjbLabel + _plus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bullBoxesRJB) > rjbMaxBoxSet
+        box.delete(array.shift(_bullBoxesRJB))
+    array.push(_bullBoxesRJB, _bullboxRJB)
+if plotRJB and isUpRjb2
+    box _bullboxRJB2 = box.new(bar_index - 1, open[1], bar_index, low[1], bgcolor=rjbBullColor, border_color=color.new(rjbBullColor, rjbBorderTransparency), border_style=rjbBoxBorder, border_width=1, text=showBlockLabels ? _rjbLabel + _plus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bullBoxesRJB) > rjbMaxBoxSet
+        box.delete(array.shift(_bullBoxesRJB))
+    array.push(_bullBoxesRJB, _bullboxRJB2)
+if plotRJB
+    _controlBox(_bearBoxesRJB, high, low, _rjb)
+    _controlBox(_bullBoxesRJB, high, low, _rjb)
+
+// ——— BoS en boxes (zone pivot à la cassure) ———
+bool crossOverPivotHigh = ta.crossover(useHighLowForBullishBoS ? high : close, lastPivotHigh)
+bool crossUnderPivotLow = ta.crossunder(useHighLowForBearishBoS ? low : close, lastPivotLow)
+if plotBOSBoxes and not na(lastPivotHigh) and crossOverPivotHigh
+    box _bullboxBOS = box.new(bar_index, lastPivotHigh, bosBoxFlag ? bar_index + bosBoxLength : bar_index + 1, lastPivotLow, bgcolor=bosBullColor, border_color=color.new(bosBullColor, bosBorderTransparency), border_style=bosBoxBorder, border_width=1, text=showBlockLabels ? _bosLabel + _plus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bullBoxesBOS) > bosMaxBoxSet
+        box.delete(array.shift(_bullBoxesBOS))
+    array.push(_bullBoxesBOS, _bullboxBOS)
+if plotBOSBoxes and not na(lastPivotLow) and crossUnderPivotLow
+    box _bearboxBOS = box.new(bar_index, lastPivotHigh, bosBoxFlag ? bar_index + bosBoxLength : bar_index + 1, lastPivotLow, bgcolor=bosBearColor, border_color=color.new(bosBearColor, bosBorderTransparency), border_style=bosBoxBorder, border_width=1, text=showBlockLabels ? _bosLabel + _minus : _empty, text_halign=text.align_right, text_valign=text.align_bottom, text_size=size.tiny, text_color=color.white)
+    if array.size(_bearBoxesBOS) > bosMaxBoxSet
+        box.delete(array.shift(_bearBoxesBOS))
+    array.push(_bearBoxesBOS, _bearboxBOS)
+if plotBOSBoxes
+    _controlBox(_bearBoxesBOS, high, low, _bos)
+    _controlBox(_bullBoxesBOS, high, low, _bos)
+
+// Libellés BOS / CHoCH (CHOCH = reversal, BOS = continuation — un seul label par cassure)
+if showBOSCHOCHLabels and bullCHoCH
+    label.new(bar_index, high, "CHOCH", style=label.style_label_down, color=color.new(#1B5E20, 0), textcolor=color.white, size=size.small)
+else if showBOSCHOCHLabels and bullBOS
+    label.new(bar_index, high, "BOS", style=label.style_label_down, color=color.new(#2E7D32, 10), textcolor=color.white, size=size.small)
+if showBOSCHOCHLabels and bearCHoCH
+    label.new(bar_index, low, "CHOCH", style=label.style_label_up, color=color.new(#B71C1C, 0), textcolor=color.white, size=size.small)
+else if showBOSCHOCHLabels and bearBOS
+    label.new(bar_index, low, "BOS", style=label.style_label_up, color=color.new(#C62828, 10), textcolor=color.white, size=size.small)
+
+// ——— PPDD (Premium Premium / Discount Discount) : triangles et X (variables calculées plus haut) ———
+plotshape(premiumPremium, "PPDD baissier (triangle)", style=shape.triangledown, location=location.abovebar, color=ppddBearColor, size=size.tiny)
+plotshape(discountDiscount, "PPDD haussier (triangle)", style=shape.triangleup, location=location.belowbar, color=ppddBullColor, size=size.tiny)
+plotshape(premiumPremiumWeak, "PPDD baissier faible (X)", style=shape.xcross, location=location.abovebar, color=ppddBearColor, size=size.tiny)
+plotshape(discountDiscountWeak, "PPDD haussier faible (X)", style=shape.xcross, location=location.belowbar, color=ppddBullColor, size=size.tiny)
+
+// ——— OB + FVG empilé (losange quand FVG et OB ensemble) ———
+plotshape(plotOBFVG and isFvgDown(0) and isObDown(1), "OB+FVG baissier (losange)", style=shape.diamond, location=location.abovebar, color=obfvgBearColor, size=size.tiny)
+plotshape(plotOBFVG and isFvgUp(0) and isObUp(1), "OB+FVG haussier (losange)", style=shape.diamond, location=location.belowbar, color=obfvgBullColor, size=size.tiny)
+
+// ——— Lignes BOS/CHOCH : tracer le niveau cassé (pivot high ou low) à chaque cassure ———
+var line lineBOSCHOCHBull = na
+var line lineBOSCHOCHBear = na
+if showCHoCHLine and (bullBOS or bullCHoCH) and not na(lastPivotHigh)
+    if not na(lineBOSCHOCHBull)
+        line.delete(lineBOSCHOCHBull)
+    lineBOSCHOCHBull := line.new(bar_index, lastPivotHigh, bar_index + chochLineExtend, lastPivotHigh, color=bullCHoCH ? color.new(#1B5E20, 0) : color.new(#2E7D32, 20), width=2)
+    line.set_style(lineBOSCHOCHBull, line.style_solid)
+if showCHoCHLine and (bearBOS or bearCHoCH) and not na(lastPivotLow)
+    if not na(lineBOSCHOCHBear)
+        line.delete(lineBOSCHOCHBear)
+    lineBOSCHOCHBear := line.new(bar_index, lastPivotLow, bar_index + chochLineExtend, lastPivotLow, color=bearCHoCH ? color.new(#B71C1C, 0) : color.new(#C62828, 20), width=2)
+    line.set_style(lineBOSCHOCHBear, line.style_solid)
+
+// ——— Zone OTE : Dynamique = zone courante (suit tendance) ; Stable = ancrée au setup si entrée OTE ———
+var box oteBox = na
+var label oteLabel = na
+float oteDrawTop = na
+float oteDrawBot = na
+int oteDrawLeft = bar_index - 25
+int oteDrawRight = bar_index + 55
+string oteLabelText = "OTE\n(61.8%-78.6%)"
+if levelMode == "Dynamique"
+    oteDrawLeft := bar_index - 25
+    oteDrawRight := bar_index + 55
+    if trendLong and oteLongValid
+        oteDrawTop := oteTop
+        oteDrawBot := oteBot
+        oteLabelText := "OTE (61.8%-78.6%)\nLong dynamique"
+    else if trendShort and oteShortValid
+        oteDrawTop := oteTopShort
+        oteDrawBot := oteBotShort
+        oteLabelText := "OTE (61.8%-78.6%)\nShort dynamique"
+else if not na(savedEntry) and savedUsedOTE and not na(savedOteTop) and not na(savedOteBot)
+    oteDrawTop := savedOteTop
+    oteDrawBot := savedOteBot
+    oteDrawLeft := targetBar
+    oteDrawRight := extendRight
+    oteLabelText := "OTE (61.8%-78.6%)\naligné entrée"
+else if oteLongValid
+    oteDrawTop := oteTop
+    oteDrawBot := oteBot
+else if oteShortValid
+    oteDrawTop := oteTopShort
+    oteDrawBot := oteBotShort
+bool showOteBox = showOTEZone and (levelMode == "Dynamique" and ((trendLong and oteLongValid) or (trendShort and oteShortValid))) or (levelMode == "Stable" and ((not na(savedEntry) and savedUsedOTE and not na(savedOteTop) and not na(savedOteBot)) or ((oteLongValid or oteShortValid) and na(savedEntry))))
+if showOteBox
+    if not na(oteBox)
+        box.delete(oteBox)
+    if not na(oteLabel)
+        label.delete(oteLabel)
+    if not na(oteDrawTop) and not na(oteDrawBot)
+        oteBox := box.new(oteDrawLeft, math.max(oteDrawTop, oteDrawBot), oteDrawRight, math.min(oteDrawTop, oteDrawBot), border_color=color.new(#9C27B0, 40), bgcolor=color.new(#9C27B0, 88))
+        oteLabel := label.new(oteDrawRight - 5, (oteDrawTop + oteDrawBot) / 2, oteLabelText, style=label.style_label_left, color=color.new(#9C27B0, 30), textcolor=color.white, size=size.tiny)
+
+// (Prédiction entrée / SL / TP supprimée — indicateur visuel FVG, OB, BOS/CHOCH, OTE uniquement)

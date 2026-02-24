@@ -1,0 +1,557 @@
+@page
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IntuneWksManager - Administration</title>
+    <base href="@Url.Content("~/")" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='22' font-size='20' fill='%230078d4'%3EIW%3C/text%3E%3C/svg%3E" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="js/icons.js"></script>
+    <script src="js/theme.js"></script>
+</head>
+<body>
+    <div id="toast-container" class="toast-container"></div>
+    
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">IW</div>
+                <div>
+                    <div id="sidebar-title" class="sidebar-title">IntuneWksManager</div>
+                    <div class="sidebar-subtitle">Admin Principal</div>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title" data-i18n="nav.sectionGeneral">Général</div>
+                    <a class="nav-item active" data-page="dashboard" data-icon="dashboard"><span class="nav-item-icon"></span><span data-i18n="nav.dashboard">Tableau de bord</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title" data-i18n="nav.sectionAccess">Gestion des accès</div>
+                    <a class="nav-item" data-page="requests" data-icon="requests"><span class="nav-item-icon"></span><span data-i18n="nav.requests">Demandes d'accès</span> <span id="requests-badge" class="nav-badge hidden">0</span></a>
+                    <a class="nav-item" data-page="admins" data-icon="admins"><span class="nav-item-icon"></span><span data-i18n="nav.admins">Admins secondaires</span></a>
+                    <a class="nav-item" data-page="roles" data-icon="roles"><span class="nav-item-icon"></span><span data-i18n="nav.roles">Rôles & Permissions</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title" data-i18n="nav.sectionIntune">Intune</div>
+                    <a class="nav-item" data-page="devices" data-icon="devices"><span class="nav-item-icon"></span><span data-i18n="nav.devices">Appareils</span></a>
+                    <a class="nav-item" data-page="intune-users" data-icon="users"><span class="nav-item-icon"></span><span data-i18n="nav.intuneUsers">Utilisateurs AD</span></a>
+                    <a class="nav-item" data-page="apps" data-icon="apps"><span class="nav-item-icon"></span><span data-i18n="nav.apps">Applications</span></a>
+                    <a class="nav-item" data-page="reports" data-icon="chart"><span class="nav-item-icon"></span><span data-i18n="nav.reports">Rapports</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title" data-i18n="nav.sectionSystem">Système</div>
+                    <a class="nav-item" data-page="setup" data-icon="setup"><span class="nav-item-icon"></span><span data-i18n="nav.setup">Configuration système</span></a>
+                    <a class="nav-item" data-page="backup" data-icon="backup"><span class="nav-item-icon"></span><span data-i18n="nav.backup">Sauvegarde</span></a>
+                    <a class="nav-item" data-page="settings" data-icon="settings"><span class="nav-item-icon"></span><span data-i18n="nav.settings">Paramètres</span></a>
+                    <a class="nav-item" data-page="audit" data-icon="audit"><span class="nav-item-icon"></span><span data-i18n="nav.audit">Journal d'audit</span></a>
+                </div>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div id="storage-status-badge" class="connection-badge disconnected" role="status" aria-live="polite" title="État du stockage (base de données ou fichiers JSON)">
+                    <span class="status-dot offline"></span>Stockage : —
+                </div>
+                <div id="connection-status" class="connection-badge disconnected mt-1" title="Connexion Microsoft Graph (Intune)">
+                    <span class="status-dot offline"></span>Graph : —
+                </div>
+            </div>
+        </aside>
+        
+        <main class="main-content">
+            <header class="main-header">
+                <h1 id="header-title" class="header-title">Tableau de bord</h1>
+                <div class="header-actions">
+                    <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Basculer le thème"></button>
+                    <div class="user-menu">
+                        <div class="user-avatar" id="user-avatar">A</div>
+                        <div class="user-info">
+                            <div class="user-name" id="current-user-name">…</div>
+                            <div class="user-role" id="current-user-role">Admin Principal</div>
+                        </div>
+                        <a href="MicrosoftIdentity/Account/SignOut" class="btn btn-ghost btn-sm ml-auto">Déconnexion</a>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="content-area">
+                <!-- Dashboard -->
+                <div id="page-dashboard" class="page-content">
+                    <div class="page-header">
+                        <div><h2 class="page-title">Tableau de bord</h2><p class="page-subtitle">Vue d'ensemble - Administration Principale</p></div>
+                    </div>
+                    <div class="grid grid-3 mb-4">
+                        <div class="stat-card"><div class="stat-icon orange" data-icon="statRequests"></div><div class="stat-content"><div id="stat-requests" class="stat-value">0</div><div class="stat-label">Demandes en attente</div></div></div>
+                        <div class="stat-card"><div class="stat-icon blue" data-icon="statAdmins"></div><div class="stat-content"><div id="stat-admins" class="stat-value">0</div><div class="stat-label">Admins secondaires</div></div></div>
+                        <div class="stat-card"><div class="stat-icon green" data-icon="statDevices"></div><div class="stat-content"><div id="stat-devices" class="stat-value">-</div><div class="stat-label">Appareils Intune</div></div></div>
+                    </div>
+                </div>
+                
+                <!-- Requests -->
+                <div id="page-requests" class="page-content hidden">
+                    <div class="page-header"><div><h2 class="page-title">Demandes d'accès</h2></div></div>
+                    <div class="card"><div class="table-container"><table><thead><tr><th>Utilisateur</th><th>Email</th><th>Message</th><th>Date</th><th>Actions</th></tr></thead><tbody id="requests-table-body"><tr><td colspan="5" class="text-center text-muted">Aucune demande</td></tr></tbody></table></div></div>
+                </div>
+                
+                <!-- Admins -->
+                <div id="page-admins" class="page-content hidden">
+                    <div class="page-header"><div><h2 class="page-title">Admins Secondaires</h2></div><button class="btn btn-primary" onclick="showAddAdminModal()"><span class="btn-icon" data-icon="add"></span> Nouvel admin</button></div>
+                    <div class="card"><div class="table-container"><table><thead><tr><th>Utilisateur</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Actions</th></tr></thead><tbody id="admins-table-body"></tbody></table></div></div>
+                </div>
+                
+                <!-- Roles -->
+                <div id="page-roles" class="page-content hidden">
+                    <div class="page-header"><div><h2 class="page-title">Rôles & Permissions</h2></div></div>
+                    <div class="card"><div class="table-container"><table><thead><tr><th>Rôle</th><th>Description</th><th>Permissions</th></tr></thead><tbody id="roles-table-body"></tbody></table></div></div>
+                    <div class="card mt-4"><div class="card-header"><h3 class="card-title">Permissions disponibles</h3></div><div class="card-body" id="permissions-list"></div></div>
+                </div>
+                
+                <!-- Devices -->
+                <div id="page-devices" class="page-content hidden">
+                    <div class="page-header">
+                        <div><h2 class="page-title">Appareils Intune</h2><p class="page-subtitle">Recherche par nom, utilisateur ou OS • Filtre par type</p></div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                            <select id="devices-type-filter" class="form-select" style="max-width:140px;">
+                                <option value="">Tous</option>
+                                <option value="windows">Windows</option>
+                                <option value="macos">macOS</option>
+                                <option value="android">Android</option>
+                                <option value="ios">iOS</option>
+                                <option value="linux">Linux</option>
+                            </select>
+                            <input type="text" id="devices-search" class="form-input" placeholder="Rechercher…" style="max-width:220px;min-width:180px;" autocomplete="off" />
+                            <button class="btn btn-secondary" onclick="loadDevices()"><span class="btn-icon" data-icon="refresh"></span> Actualiser</button>
+                        </div>
+                    </div>
+                    <div class="card"><div class="table-container"><table><thead><tr><th>Nom</th><th>Utilisateur</th><th>OS</th><th>Conformité</th><th>Sync</th><th>Actions</th></tr></thead><tbody id="devices-table-body"></tbody></table></div></div>
+                </div>
+                
+                <!-- Intune Users -->
+                <div id="page-intune-users" class="page-content hidden">
+                    <div class="page-header"><div><h2 class="page-title">Utilisateurs Azure AD</h2></div></div>
+                    <div class="card"><div class="table-container"><table><thead><tr><th>Nom</th><th>UPN</th><th>Email</th><th>Département</th></tr></thead><tbody id="intune-users-table-body"></tbody></table></div></div>
+                </div>
+                
+                <!-- Apps -->
+                <div id="page-apps" class="page-content hidden">
+                    <div class="page-header">
+                        <div><h2 class="page-title">Applications Intune</h2><p class="page-subtitle">Recherche par nom ou éditeur</p></div>
+                        <input type="text" id="apps-search" class="form-input" placeholder="Rechercher…" style="max-width:220px;min-width:180px;" autocomplete="off" />
+                    </div>
+                    <div class="card"><div class="table-container"><table><thead><tr><th>Nom</th><th>Éditeur</th><th>Type</th><th>Date</th></tr></thead><tbody id="apps-table-body"></tbody></table></div></div>
+                </div>
+                
+                <!-- Reports -->
+                <div id="page-reports" class="page-content hidden">
+                    <div class="page-header">
+                        <div><h2 class="page-title">Rapports</h2><p class="page-subtitle">Tableaux de bord et statistiques</p></div>
+                        <button class="btn btn-secondary" onclick="loadReports()"><span class="btn-icon" data-icon="refresh"></span> Actualiser</button>
+                    </div>
+                    
+                    <!-- Report Tabs -->
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div style="display:flex;gap:0.5rem;border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;margin-bottom:1rem;">
+                                <button class="btn btn-ghost" onclick="showReportTab('compliance')" id="tab-compliance">Rapport de conformité</button>
+                                <button class="btn btn-ghost" onclick="showReportTab('devices')" id="tab-devices">Rapport des appareils</button>
+                                <button class="btn btn-ghost" onclick="showReportTab('apps')" id="tab-apps">Rapport des applications</button>
+                            </div>
+                            
+                            <!-- Compliance Report -->
+                            <div id="report-compliance" class="report-section">
+                                <h3 class="mb-3">Rapport de conformité</h3>
+                                <div class="grid grid-3 mb-4">
+                                    <div class="stat-card">
+                                        <div class="stat-icon green" data-icon="statDevices"></div>
+                                        <div class="stat-content">
+                                            <div id="report-compliant-count" class="stat-value">-</div>
+                                            <div class="stat-label">Appareils conformes</div>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon orange" data-icon="statDevices"></div>
+                                        <div class="stat-content">
+                                            <div id="report-noncompliant-count" class="stat-value">-</div>
+                                            <div class="stat-label">Appareils non conformes</div>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon blue" data-icon="statDevices"></div>
+                                        <div class="stat-content">
+                                            <div id="report-compliant-percent" class="stat-value">-</div>
+                                            <div class="stat-label">Taux de conformité</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-header"><h3>Détails par appareil</h3></div>
+                                    <div class="table-container">
+                                        <table>
+                                            <thead>
+                                                <tr><th>Appareil</th><th>Utilisateur</th><th>OS</th><th>État de conformité</th><th>Dernière synchronisation</th></tr>
+                                            </thead>
+                                            <tbody id="compliance-table-body"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Devices Report -->
+                            <div id="report-devices" class="report-section hidden">
+                                <h3 class="mb-3">Rapport des appareils</h3>
+                                <div class="grid grid-4 mb-4">
+                                    <div class="stat-card">
+                                        <div class="stat-icon blue" data-icon="statDevices"></div>
+                                        <div class="stat-content">
+                                            <div id="report-devices-total" class="stat-value">-</div>
+                                            <div class="stat-label">Total appareils</div>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon green" data-icon="statDevices"></div>
+                                        <div class="stat-content">
+                                            <div id="report-devices-windows" class="stat-value">-</div>
+                                            <div class="stat-label">Windows</div>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon cyan" data-icon="statDevices"></div>
+                                        <div class="stat-content">
+                                            <div id="report-devices-macos" class="stat-value">-</div>
+                                            <div class="stat-label">macOS</div>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon orange" data-icon="statDevices"></div>
+                                        <div class="stat-content">
+                                            <div id="report-devices-mobile" class="stat-value">-</div>
+                                            <div class="stat-label">Android/iOS</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-header"><h3>Répartition par système d'exploitation</h3></div>
+                                    <div class="card-body">
+                                        <div id="devices-os-chart" class="mb-4"></div>
+                                        <div class="table-container">
+                                            <table>
+                                                <thead>
+                                                    <tr><th>Système d'exploitation</th><th>Nombre</th><th>Pourcentage</th></tr>
+                                                </thead>
+                                                <tbody id="devices-os-table-body"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Apps Report -->
+                            <div id="report-apps" class="report-section hidden">
+                                <h3 class="mb-3">Rapport des applications</h3>
+                                <div class="grid grid-3 mb-4">
+                                    <div class="stat-card">
+                                        <div class="stat-icon blue" data-icon="apps"></div>
+                                        <div class="stat-content">
+                                            <div id="report-apps-total" class="stat-value">-</div>
+                                            <div class="stat-label">Total applications</div>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon green" data-icon="apps"></div>
+                                        <div class="stat-content">
+                                            <div id="report-apps-store" class="stat-value">-</div>
+                                            <div class="stat-label">Store Apps</div>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon orange" data-icon="apps"></div>
+                                        <div class="stat-content">
+                                            <div id="report-apps-lob" class="stat-value">-</div>
+                                            <div class="stat-label">LOB Apps</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-header"><h3>Applications récentes</h3></div>
+                                    <div class="table-container">
+                                        <table>
+                                            <thead>
+                                                <tr><th>Nom</th><th>Éditeur</th><th>Type</th><th>Date de création</th></tr>
+                                            </thead>
+                                            <tbody id="apps-report-table-body"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Settings -->
+                <div id="page-settings" class="page-content hidden">
+                    <div class="page-header"><div><h2 class="page-title" data-i18n="settings.title">Paramètres</h2><p class="page-subtitle" data-i18n="settings.languageSubtitle">Changer la langue et le titre du portail</p></div></div>
+                    <form onsubmit="saveSettings(event)">
+                        <div class="card mb-4"><div class="card-body">
+                            <div class="form-group mb-4">
+                                <label class="form-label" data-i18n="settings.sidebarTitle">Titre de la barre latérale</label>
+                                <input type="text" id="setting-sidebar-title" class="form-input" style="max-width:320px;" placeholder="IntuneWksManager" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" data-i18n="settings.language">Langue du site</label>
+                                <select id="setting-language" class="form-select" style="max-width:220px;">
+                                    <option value="fr-FR" data-i18n="settings.langFr">Français</option>
+                                    <option value="en" data-i18n="settings.langEn">English</option>
+                                </select>
+                            </div>
+                        </div></div>
+                        <button type="submit" class="btn btn-primary mt-4" data-i18n="settings.save">Enregistrer</button>
+                    </form>
+                </div>
+                
+                <!-- Sauvegarde -->
+                <div id="page-backup" class="page-content hidden">
+                    <div class="page-header"><div><h2 class="page-title" data-i18n="nav.backup">Sauvegarde</h2><p class="page-subtitle">Exporter ou restaurer la configuration du portail (fichier chiffré, à stocker hors du site)</p></div></div>
+                    <section class="card mb-4">
+                        <div class="card-header"><h3>Exporter une sauvegarde</h3></div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">Télécharge un fichier chiffré contenant toute la configuration. <strong>Une clé de restauration vous sera affichée une seule fois</strong> : copiez-la et conservez-la en lieu sûr ; elle sera exigée pour restaurer cette sauvegarde.</p>
+                            <button type="button" class="btn btn-primary" onclick="downloadBackup()"><span class="btn-icon" data-icon="refresh"></span> Télécharger la sauvegarde</button>
+                            <div id="backup-download-status" class="mt-3"></div>
+                        </div>
+                    </section>
+                    <section class="card mb-4">
+                        <div class="card-header"><h3>Restaurer depuis un fichier</h3></div>
+                        <div class="card-body">
+                            <p class="text-muted mb-3">Choisissez un fichier .enc et saisissez la clé de restauration (celle affichée une seule fois lors de la sauvegarde). Si la clé ne correspond pas, la restauration est refusée.</p>
+                            <form id="restore-form">
+                                <div class="form-group"><label class="form-label">Fichier de sauvegarde (.enc)</label><input type="file" id="restore-file" class="form-input" accept=".enc,application/octet-stream" required /></div>
+                                <div class="form-group"><label class="form-label">Clé de restauration</label><input type="text" id="restore-key" class="form-input" placeholder="Collez la clé affichée lors de la sauvegarde" autocomplete="off" /><small class="text-muted">Requis pour les sauvegardes récentes</small></div>
+                                <button type="submit" class="btn btn-secondary">Restaurer la configuration</button>
+                            </form>
+                            <div id="backup-restore-status" class="mt-3"></div>
+                        </div>
+                    </section>
+                </div>
+                
+                <!-- Configuration système (intégrée) -->
+                <div id="page-setup" class="page-content hidden">
+                    <div class="page-header"><div><h2 class="page-title" data-i18n="nav.setup">Configuration système</h2><p class="page-subtitle" data-i18n="setupPage.subtitle">Stockage, Azure AD, administrateurs principaux</p></div></div>
+                    <!-- Stockage : connexion DB + test + setup tables ; ou fichiers JSON -->
+                    <section class="card mb-4">
+                        <div class="card-header"><h2 data-i18n="setupPage.storageTitle">Stockage des données</h2><p class="card-subtitle" data-i18n="setupPage.storageSubtitle">Connexion base de données ou fichiers JSON. Après modification, redémarrer le pool d'applications IIS (ou le site web).</p></div>
+                        <div class="card-body">
+                            <div id="storage-active-badge" class="storage-active-badge mb-3" role="status" aria-live="polite">
+                                <span id="storage-current-mode"></span>
+                                <p id="storage-notice-restart" class="storage-notice-restart mt-1 mb-0 text-sm"></p>
+                            </div>
+                            <form id="storage-form">
+                                <h3 class="h4 mb-3" data-i18n="setupPage.sqlTitle">Connexion SQL Server</h3>
+                                <div class="storage-sql-grid storage-sql-grid-3 mb-3">
+                                    <div class="storage-sql-field"><label for="storage-server" class="storage-sql-label" data-i18n="setupPage.serverLabel">Serveur (instance)</label><input type="text" id="storage-server" class="form-control" data-i18n-placeholder="setupPage.serverPlaceholder" placeholder="localhost ou .\SQLEXPRESS" /></div>
+                                    <div class="storage-sql-field"><label for="storage-port" class="storage-sql-label"><span data-i18n="setupPage.portLabel">Port</span> <span class="storage-sql-hint" data-i18n="setupPage.portHint">(défaut 1433)</span></label><input type="number" id="storage-port" class="form-control" placeholder="1433" min="1" max="65535" /></div>
+                                    <div class="storage-sql-field"><label for="storage-database" class="storage-sql-label" data-i18n="setupPage.databaseLabel">Base de données</label><input type="text" id="storage-database" class="form-control" data-i18n-placeholder="setupPage.databasePlaceholder" data-i18n-title="setupPage.databaseTitle" placeholder="IntuneWksManager" value="IntuneWksManager" title="Le nom doit correspondre à une base existante" /></div>
+                                </div>
+                                <p class="text-muted text-sm mb-2" data-i18n="setupPage.dbMustExist">La base doit exister sur le serveur et le compte IIS APPPOOL\IntuneWksManager doit y avoir accès (voir aide ci‑dessous).</p>
+                                <div class="storage-sql-row mb-2"><label class="checkbox-label"><input type="checkbox" id="storage-integrated" /> <span data-i18n="setupPage.integratedAuth">Authentification Windows</span></label></div>
+                                <p class="text-muted text-sm mb-3" id="storage-integrated-hint" style="display:none;" data-i18n="setupPage.integratedHint">La connexion SQL utilisera le compte Windows de l'utilisateur connecté (session), pas le pool IIS. Activez l'authentification Windows dans IIS pour cette application : le navigateur enverra alors les identifiants Windows et SQL Server verra votre compte (ex. DOMAINE\utilisateur). Accordez à votre compte les droits sur la base.</p>
+                                <div id="storage-sql-auth" class="storage-sql-auth-fields mb-3">
+                                    <div class="storage-sql-grid storage-sql-grid-2">
+                                        <div class="storage-sql-field"><label for="storage-user" class="storage-sql-label" data-i18n="setupPage.sqlUserLabel">Utilisateur SQL</label><input type="text" id="storage-user" class="form-control" autocomplete="off" /></div>
+                                        <div class="storage-sql-field"><label for="storage-password" class="storage-sql-label"><span data-i18n="setupPage.passwordLabel">Mot de passe</span> <span class="storage-sql-hint" data-i18n="setupPage.passwordHint">(vide = ne pas modifier)</span></label><input type="password" id="storage-password" class="form-control" placeholder="••••••••" autocomplete="new-password" /></div>
+                                    </div>
+                                </div>
+                                <div class="form-actions mb-3 d-flex flex-wrap gap-2">
+                                    <button type="button" id="storage-btn-test" class="btn btn-secondary"><span class="btn-icon" data-icon="refresh"></span> <span data-i18n="setupPage.btnTest">Tester la connexion</span></button>
+                                    <button type="button" id="storage-btn-setup-tables" class="btn btn-secondary" data-i18n="setupPage.btnSetupTables">Créer les tables</button>
+                                    <button type="submit" class="btn btn-primary"><span class="btn-icon" data-icon="settings"></span> <span data-i18n="setupPage.btnSaveSql">Enregistrer et utiliser SQL Server</span></button>
+                                </div>
+                                <div id="storage-status" class="mt-3"></div>
+                                <details class="mt-3 text-muted text-sm">
+                                    <summary data-i18n="setupPage.sqlDetailsSummary">Commandes SQL pour créer la base et accorder l'accès (Authentification Windows)</summary>
+                                    <p class="mt-2 mb-1" data-i18n="setupPage.sqlDetailsText">À exécuter dans SQL Server Management Studio (ou sqlcmd) en tant qu'administrateur. Adaptez le nom de la base si besoin. Le login doit être le compte du pool IIS.</p>
+                                    <pre class="p-3 bg-subtle rounded overflow-auto text-xs" style="white-space:pre-wrap;">-- 1) Créer la base (si elle n'existe pas)
+IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = N'IntuneWksManager')
+    CREATE DATABASE [IntuneWksManager];
+
+-- 2) Créer le login Windows pour le pool d'applications (sera utilisé par l'app)
+USE [master];
+IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = N'IIS APPPOOL\IntuneWksManager')
+    CREATE LOGIN [IIS APPPOOL\IntuneWksManager] FROM WINDOWS;
+
+-- 3) Donner l'accès à la base au login
+USE [IntuneWksManager];
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = N'IIS APPPOOL\IntuneWksManager')
+BEGIN
+    CREATE USER [IIS APPPOOL\IntuneWksManager] FOR LOGIN [IIS APPPOOL\IntuneWksManager];
+    ALTER ROLE db_owner ADD MEMBER [IIS APPPOOL\IntuneWksManager];
+END</pre>
+                                </details>
+                            </form>
+                            <hr class="my-4" />
+                            <div>
+                                <h3 class="h4 mb-2" data-i18n="setupPage.jsonTitle">Fichiers JSON</h3>
+                                <p class="text-muted mb-2" data-i18n="setupPage.jsonDesc">Crée le dossier Config/ et les fichiers nécessaires, puis active ce mode. Les fichiers créés sont vides ; les données en SQL ne sont pas copiées. Redémarrez ensuite le pool IIS.</p>
+                                <button type="button" id="storage-btn-ensure-json" class="btn btn-secondary" data-i18n="setupPage.btnJson">Utiliser les fichiers JSON</button>
+                            </div>
+                        </div>
+                    </section>
+                    <!-- Azure AD -->
+                    <section class="card mb-4">
+                        <div class="card-header"><h2 data-i18n="setupPage.azureAdTitle">Configuration Azure AD</h2></div>
+                        <div class="card-body">
+                            <form id="azuread-form">
+                                <div class="form-group"><label for="tenant-id" data-i18n="setupPage.tenantIdLabel">Tenant ID</label><input type="text" id="tenant-id" class="form-control" required /></div>
+                                <div class="form-group"><label for="client-id" data-i18n="setupPage.clientIdLabel">Client ID</label><input type="text" id="client-id" class="form-control" required /></div>
+                                <div class="form-group"><label for="client-secret" data-i18n="setupPage.clientSecretLabel">Client Secret</label><input type="password" id="client-secret" class="form-control" data-i18n-placeholder="setupPage.clientSecretPlaceholder" placeholder="Laisser vide pour conserver" /><small class="text-muted" data-i18n="setupPage.encryptedHint">Chiffré automatiquement</small></div>
+                                <div class="form-actions"><button type="submit" class="btn btn-primary" data-i18n="setupPage.btnSave">Sauvegarder</button><button type="button" class="btn btn-secondary ml-2" onclick="testGraphConnection()"><span class="btn-icon" data-icon="refresh"></span> Tester Graph API</button></div>
+                                <div id="azuread-status" class="mt-3"></div>
+                            </form>
+                            <hr class="my-4" />
+                            <div class="card-subtitle mb-2" data-i18n="setupPage.encryptedSectionTitle">Valeur chiffrée pour appsettings.json</div>
+                            <p class="text-muted text-sm mb-2" data-i18n="setupPage.encryptedSectionDesc">Saisissez le secret en clair puis cliquez sur Générer. Copiez la valeur ENC:... dans appsettings.json → AzureAd:ClientSecret.</p>
+                            <div class="form-group"><label for="encrypt-secret-plain" data-i18n="setupPage.secretPlainLabel">Secret en clair</label><input type="password" id="encrypt-secret-plain" class="form-control" data-i18n-placeholder="setupPage.secretPlainPlaceholder" placeholder="Votre Client Secret Azure AD" autocomplete="off" /></div>
+                            <button type="button" class="btn btn-secondary" onclick="generateEncryptedSecretForAppsettings()" data-i18n="setupPage.btnGenerate">Générer valeur chiffrée</button>
+                            <div id="encrypted-secret-result" class="mt-3 hidden"><label class="form-label" data-i18n="setupPage.valueToPasteLabel">Valeur à coller dans appsettings.json</label><pre id="encrypted-secret-value" class="p-3 bg-subtle rounded text-sm" style="word-break:break-all;"></pre><button type="button" class="btn btn-ghost btn-sm" onclick="copyEncryptedSecretToClipboard()" data-i18n="setupPage.btnCopy">Copier</button></div>
+                        </div>
+                    </section>
+                    <!-- Admins principaux -->
+                    <section class="card mb-4">
+                        <div class="card-header"><div class="flex items-center justify-between"><h2 data-i18n="setupPage.primaryAdminsTitle">Administrateurs Principaux</h2><button class="btn btn-primary" onclick="showSetupAdminModal()"><span class="btn-icon" data-icon="add"></span> <span data-i18n="setupPage.btnAdd">Ajouter</span></button></div></div>
+                        <div class="card-body">
+                            <div class="table-container"><table class="table"><thead><tr><th data-i18n="setupPage.tableEmail">Email</th><th data-i18n="setupPage.tableName">Nom</th><th data-i18n="setupPage.tableObjectId">Object ID</th><th data-i18n="setupPage.tableStatus">Statut</th><th data-i18n="setupPage.tableActions">Actions</th></tr></thead><tbody id="primary-admins-tbody"><tr><td colspan="5" class="text-center text-muted" data-i18n="storage.loading">Chargement...</td></tr></tbody></table></div>
+                        </div>
+                    </section>
+                </div>
+                
+                <!-- Audit -->
+                <div id="page-audit" class="page-content hidden">
+                    <div class="page-header">
+                        <div><h2 class="page-title">Journal d'audit</h2><p class="page-subtitle">Traçabilité de toutes les actions (admin principal et admins secondaires)</p></div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;">
+                            <select id="audit-filter-actor" class="form-select" style="max-width:220px;" onchange="filterAudit()">
+                                <option value="all">Toutes les actions</option>
+                                <option value="secondary">Admins secondaires uniquement</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="loadAudit()"><span class="btn-icon" data-icon="refresh"></span> Actualiser</button>
+                        </div>
+                    </div>
+                    <div class="card"><div class="table-container"><table><thead><tr><th>Date</th><th>Acteur</th><th>Type</th><th>Action</th><th>Détails</th></tr></thead><tbody id="audit-table-body"></tbody></table></div></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Admin Modal -->
+    <div id="admin-modal" class="modal-overlay">
+        <div class="modal" style="max-width:700px;">
+            <div class="modal-header"><h3 id="admin-modal-title" class="modal-title">Nouvel Admin</h3><button class="modal-close" onclick="closeModal('admin-modal')">&times;</button></div>
+            <form id="admin-form" onsubmit="saveAdmin(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="admin-id" />
+                    <div class="form-group admin-user-search-wrap" style="position:relative;">
+                        <label class="form-label">Rechercher un utilisateur (Entra ID)</label>
+                        <input type="text" id="admin-user-search" class="form-input" placeholder="" autocomplete="off" />
+                        <div id="admin-user-search-results" class="admin-search-results hidden"></div>
+                    </div>
+                    <div class="form-row"><div class="form-group"><label class="form-label">Email *</label><input type="email" id="admin-email" class="form-input" required /></div><div class="form-group"><label class="form-label">Nom *</label><input type="text" id="admin-displayname" class="form-input" required /></div></div>
+                    <div class="form-group"><label class="form-label">Rôle</label><select id="admin-role" class="form-select"></select></div>
+                    <div class="form-group"><label class="checkbox-label"><input type="checkbox" id="admin-active" checked /> Actif</label></div>
+                    <div class="form-group"><label class="form-label">Actions (permissions)</label><p class="text-muted text-sm mb-1">Les permissions de type « lecture » (devices.read, users.read, apps.read, policies.read) se cochent automatiquement lorsque vous sélectionnez une action qui en dépend.</p><div id="admin-actions" class="permissions-grid"></div></div>
+                    <div class="form-group"><label class="form-label">Types d'appareils autorisés</label><p class="text-muted text-sm mb-1">Vide = tous. Sinon, l'admin secondaire ne voit que ces types.</p><div id="admin-device-types" class="permissions-grid"></div></div>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('admin-modal')">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer</button></div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Set Primary User Modal -->
+    <div id="set-primary-user-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title">Définir l'utilisateur principal</h3><button class="modal-close" onclick="closeModal('set-primary-user-modal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="set-primary-user-device-id" />
+                <div class="form-group"><label class="form-label">Utilisateur Azure AD</label><select id="set-primary-user-select" class="form-select"></select></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('set-primary-user-modal')">Annuler</button><button type="button" class="btn btn-primary" onclick="submitSetPrimaryUser()">Enregistrer</button></div>
+        </div>
+    </div>
+
+    <!-- Modal Administrateurs principaux (Configuration système) -->
+    <div id="setup-admin-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header"><h3 id="setup-admin-modal-title" class="modal-title" data-i18n="setup.adminAdd">Ajouter un administrateur principal</h3><button class="modal-close" onclick="closeModal('setup-admin-modal')">&times;</button></div>
+            <div class="modal-body">
+                <form id="setup-admin-form">
+                    <input type="hidden" id="setup-admin-id" />
+                    <div class="form-group"><label for="setup-admin-email" class="form-label" data-i18n="setupPage.modalEmail">Email *</label><input type="email" id="setup-admin-email" class="form-input form-control" required /></div>
+                    <div class="form-group"><label for="setup-admin-display-name" class="form-label" data-i18n="setupPage.modalDisplayName">Nom d'affichage</label><input type="text" id="setup-admin-display-name" class="form-input form-control" /></div>
+                    <div class="form-group"><label for="setup-admin-object-id" class="form-label" data-i18n="setupPage.modalObjectId">Azure Object ID</label><input type="text" id="setup-admin-object-id" class="form-input form-control" /></div>
+                    <div class="form-group"><label class="checkbox-label"><input type="checkbox" id="setup-admin-active" checked /> <span data-i18n="setupPage.modalActive">Actif</span></label></div>
+                    <div class="modal-footer" style="padding-left:0;padding-right:0;"><button type="button" class="btn btn-secondary" onclick="closeModal('setup-admin-modal')" data-i18n="setupPage.modalCancel">Annuler</button><button type="submit" class="btn btn-primary" data-i18n="setupPage.modalSave">Sauvegarder</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal : clé de restauration (affichée une seule fois après téléchargement sauvegarde) -->
+    <div id="backup-key-modal" class="modal-overlay">
+        <div class="modal" style="max-width:540px;">
+            <div class="modal-header"><h3 class="modal-title" data-i18n="setupPage.backupKeyTitle">Clé de restauration</h3><button class="modal-close" onclick="closeModal('backup-key-modal')">&times;</button></div>
+            <div class="modal-body">
+                <p class="text-warning mb-2" data-i18n="backup.keyWarning">Cette clé ne sera plus affichée. Copiez-la et conservez-la en lieu sûr ; elle sera exigée pour restaurer cette sauvegarde.</p>
+                <div class="form-group">
+                    <label class="form-label" data-i18n="setupPage.backupKeyTitle">Clé de restauration</label>
+                    <div class="d-flex gap-2" style="align-items:center;">
+                        <input type="text" id="backup-key-value" class="form-input" readonly style="flex:1;font-family:monospace;" />
+                        <button type="button" class="btn btn-secondary" onclick="copyBackupKeyToClipboard()" data-i18n="setupPage.btnCopy">Copier</button>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding-left:0;padding-right:0;"><button type="button" class="btn btn-primary" onclick="closeModal('backup-key-modal')" data-i18n="setupPage.backupKeyCopied">J'ai copié la clé</button></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/admin.js"></script>
+    <script>
+        // Initialize icons in navigation and buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            // Navigation icons
+            document.querySelectorAll('.nav-item[data-icon]').forEach(item => {
+                const iconName = item.dataset.icon;
+                const iconEl = item.querySelector('.nav-item-icon');
+                if (iconEl && typeof getIcon === 'function') {
+                    iconEl.innerHTML = getIcon(iconName);
+                }
+            });
+            // Button icons
+            document.querySelectorAll('.btn-icon[data-icon]').forEach(iconEl => {
+                const iconName = iconEl.dataset.icon;
+                if (typeof getIcon === 'function') {
+                    iconEl.innerHTML = getIcon(iconName);
+                }
+            });
+            // Stat card icons
+            document.querySelectorAll('.stat-icon[data-icon]').forEach(iconEl => {
+                const iconName = iconEl.dataset.icon;
+                if (typeof getIcon === 'function') {
+                    iconEl.innerHTML = getIcon(iconName);
+                }
+            });
+            // Theme toggle icon
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle && typeof getIcon === 'function') {
+                const currentTheme = getTheme();
+                themeToggle.innerHTML = currentTheme === 'dark' ? getIcon('themeLight') : getIcon('theme');
+            }
+        });
+    </script>
+</body>
+</html>

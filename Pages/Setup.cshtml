@@ -1,0 +1,229 @@
+@page
+@model IntuneWksManager.Pages.SetupModel
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "PrimaryAdmin")]
+@{
+    ViewData["Title"] = "Configuration";
+}
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Intune Workspace Manager</title>
+    <base href="@Url.Content("~/")" />
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="js/icons.js"></script>
+    <script src="js/theme.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <div class="header-content">
+                <h1>Configuration</h1>
+                <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Basculer le thème"></button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="container">
+                <!-- Stockage des données -->
+                <section class="card mb-4">
+                    <div class="card-header">
+                        <h2>Stockage des données</h2>
+                        <p class="card-subtitle">Utilisateurs, paramètres, audit. Redémarrage requis après changement.</p>
+                    </div>
+                    <div class="card-body">
+                        <form id="storage-form">
+                            <p class="text-muted mb-4">Choisissez le mode de stockage puis, pour SQL Server, renseignez la connexion ci‑dessous.</p>
+                            <!-- Choix graphique : cartes cliquables -->
+                            <div class="storage-choice-row">
+                                <input type="radio" name="storage-provider" value="Json" id="storage-opt-json" checked class="storage-radio" />
+                                <label for="storage-opt-json" class="storage-option-card" id="storage-card-json">
+                                    <span class="storage-option-icon" aria-hidden="true">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2 5 5h-5V4zM8 12h8v2H8v-2zm0 4h5v2H8v-2z" fill="currentColor"/></svg>
+                                    </span>
+                                    <span class="storage-option-title">Fichiers JSON</span>
+                                    <span class="storage-option-desc">Dossier Config/ sur le serveur</span>
+                                </label>
+                                <input type="radio" name="storage-provider" value="SqlServer" id="storage-opt-sql" class="storage-radio" />
+                                <label for="storage-opt-sql" class="storage-option-card" id="storage-card-sql">
+                                    <span class="storage-option-icon" aria-hidden="true">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 4v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2zm2 2h5v4H6V6zm0 6h3v4H6v-4zm8 0h4v4h-4v-4zm-4-6h4v4h-4V6z" fill="currentColor"/></svg>
+                                    </span>
+                                    <span class="storage-option-title">SQL Server</span>
+                                    <span class="storage-option-desc">Base de données (instance, port, compte)</span>
+                                </label>
+                            </div>
+                            <!-- Panneau configuration SQL (visible quand SQL sélectionné) -->
+                            <div id="storage-sql-panel" class="storage-sql-panel hidden">
+                                <h3 class="storage-sql-panel-title">Configuration de la base SQL Server</h3>
+                                <div class="storage-sql-grid storage-sql-grid-3">
+                                    <div class="storage-sql-field">
+                                        <label for="storage-server" class="storage-sql-label">Serveur (instance)</label>
+                                        <input type="text" id="storage-server" class="form-control" placeholder="localhost ou .\SQLEXPRESS" />
+                                    </div>
+                                    <div class="storage-sql-field">
+                                        <label for="storage-port" class="storage-sql-label">Port <span class="storage-sql-hint">(défaut 1433)</span></label>
+                                        <input type="number" id="storage-port" class="form-control" placeholder="1433" min="1" max="65535" />
+                                    </div>
+                                    <div class="storage-sql-field">
+                                        <label for="storage-database" class="storage-sql-label">Base de données</label>
+                                        <input type="text" id="storage-database" class="form-control" placeholder="IntuneWksManager" value="IntuneWksManager" />
+                                    </div>
+                                </div>
+                                <div class="storage-sql-row">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="storage-integrated" />
+                                        Authentification Windows (Integrated Security)
+                                    </label>
+                                </div>
+                                <div id="storage-sql-auth" class="storage-sql-auth-fields">
+                                    <div class="storage-sql-grid storage-sql-grid-2">
+                                        <div class="storage-sql-field">
+                                            <label for="storage-user" class="storage-sql-label">Utilisateur SQL</label>
+                                            <input type="text" id="storage-user" class="form-control" autocomplete="off" />
+                                        </div>
+                                        <div class="storage-sql-field">
+                                            <label for="storage-password" class="storage-sql-label">Mot de passe <span class="storage-sql-hint">(vide = ne pas modifier)</span></label>
+                                            <input type="password" id="storage-password" class="form-control" placeholder="••••••••" autocomplete="new-password" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-actions mt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <span class="btn-icon" data-icon="settings"></span>
+                                    Enregistrer le mode de stockage
+                                </button>
+                            </div>
+                            <div id="storage-status" class="mt-3"></div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Azure AD Configuration -->
+                <section class="card mb-4">
+                    <div class="card-header">
+                        <h2>Configuration Azure AD</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="azuread-form">
+                            <div class="form-group">
+                                <label for="tenant-id">Tenant ID</label>
+                                <input type="text" id="tenant-id" class="form-control" required />
+                            </div>
+                            <div class="form-group">
+                                <label for="client-id">Client ID</label>
+                                <input type="text" id="client-id" class="form-control" required />
+                            </div>
+                            <div class="form-group">
+                                <label for="client-secret">Client Secret</label>
+                                <input type="password" id="client-secret" class="form-control" placeholder="Laisser vide pour conserver le secret actuel" />
+                                <small class="text-muted">Le secret sera chiffré automatiquement</small>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">
+                                    <span class="btn-icon" data-icon="settings"></span>
+                                    Sauvegarder
+                                </button>
+                            </div>
+                            <div id="azuread-status" class="mt-3"></div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Primary Admins Management -->
+                <section class="card mb-4">
+                    <div class="card-header">
+                        <div class="flex items-center justify-between">
+                            <h2>Administrateurs Principaux</h2>
+                            <button class="btn btn-primary" onclick="showAddAdminModal()">
+                                <span class="btn-icon" data-icon="add"></span>
+                                Ajouter un administrateur
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="primary-admins-list" class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>Nom d'affichage</th>
+                                        <th>Object ID Azure</th>
+                                        <th>Statut</th>
+                                        <th>Créé le</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="primary-admins-tbody">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">Chargement...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Primary Admin Modal -->
+    <div id="admin-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="admin-modal-title">Ajouter un administrateur principal</h3>
+                <button class="modal-close" onclick="closeAdminModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="admin-form">
+                    <input type="hidden" id="admin-id" />
+                    <div class="form-group">
+                        <label for="admin-email">Email *</label>
+                        <input type="email" id="admin-email" class="form-control" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-display-name">Nom d'affichage</label>
+                        <input type="text" id="admin-display-name" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-object-id">Azure Object ID</label>
+                        <input type="text" id="admin-object-id" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="admin-active" checked />
+                            Actif
+                        </label>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeAdminModal()">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Sauvegarder</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/setup.js"></script>
+    <script>
+        // Initialize icons
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.btn-icon[data-icon]').forEach(iconEl => {
+                const iconName = iconEl.dataset.icon;
+                if (typeof getIcon === 'function') {
+                    iconEl.innerHTML = getIcon(iconName);
+                }
+            });
+            
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle && typeof getIcon === 'function') {
+                const currentTheme = getTheme();
+                themeToggle.innerHTML = currentTheme === 'dark' ? getIcon('themeLight') : getIcon('theme');
+            }
+        });
+    </script>
+</body>
+</html>

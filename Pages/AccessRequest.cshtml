@@ -1,0 +1,181 @@
+@page
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IntuneWksManager - Demande d'accès</title>
+    <base href="@Url.Content("~/")" />
+    <link rel="stylesheet" href="css/style.css" />
+    <style>
+        .access-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        .access-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+        .access-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 2rem;
+        }
+        .access-title {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+        .access-subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+        .user-info {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            text-align: left;
+        }
+        .user-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .user-info-row:last-child { border-bottom: none; }
+        .user-info-label { color: var(--text-secondary); }
+        .status-pending {
+            background: rgba(255, 140, 0, 0.2);
+            color: #ff8c00;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .status-pending h4 { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+    <div id="toast-container" class="toast-container"></div>
+    
+    <div class="access-container">
+        <div class="access-card">
+            <div class="access-icon">🔐</div>
+            <h1 class="access-title">Accès requis</h1>
+            <p class="access-subtitle">Vous devez demander l'accès à l'administrateur</p>
+            
+            <div id="user-info" class="user-info">
+                <div class="user-info-row">
+                    <span class="user-info-label">Nom</span>
+                    <span id="user-name">-</span>
+                </div>
+                <div class="user-info-row">
+                    <span class="user-info-label">Email</span>
+                    <span id="user-email">-</span>
+                </div>
+            </div>
+            
+            <div id="request-form">
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Message (optionnel)</label>
+                    <textarea id="request-message" class="form-textarea" placeholder="Expliquez pourquoi vous avez besoin d'accéder au portail..."></textarea>
+                </div>
+                
+                <button id="btn-request" class="btn btn-primary btn-lg" style="width: 100%;" onclick="submitRequest()">
+                    Demander l'accès
+                </button>
+            </div>
+            
+            <div id="pending-status" class="status-pending hidden">
+                <h4>⏳ Demande en attente</h4>
+                <p>Votre demande a été envoyée. Un administrateur doit l'approuver.</p>
+            </div>
+            
+            <a href="MicrosoftIdentity/Account/SignOut" class="btn btn-ghost mt-4" style="display: inline-block;">
+                Se déconnecter
+            </a>
+        </div>
+    </div>
+    
+    <script>
+        const basePath = document.querySelector('base')?.getAttribute('href') || '/';
+        let currentUser = null;
+        
+        async function init() {
+            try {
+                const res = await fetch(`${basePath}api/auth/me`);
+                currentUser = await res.json();
+                
+                document.getElementById('user-name').textContent = currentUser.displayName || '-';
+                document.getElementById('user-email').textContent = currentUser.email || '-';
+                
+                // Check if already has pending request
+                if (currentUser.isSecondaryAdmin && !currentUser.isApproved) {
+                    showPendingStatus();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        async function submitRequest() {
+            const message = document.getElementById('request-message').value;
+            
+            try {
+                const res = await fetch(`${basePath}api/access/request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: message,
+                        requestedRole: 'Viewer'
+                    })
+                });
+                
+                if (res.ok) {
+                    showPendingStatus();
+                    showToast('Demande envoyée avec succès', 'success');
+                } else {
+                    const error = await res.json();
+                    showToast(error.message || 'Erreur lors de l\'envoi', 'error');
+                }
+            } catch (error) {
+                showToast('Erreur de connexion', 'error');
+            }
+        }
+        
+        function showPendingStatus() {
+            document.getElementById('request-form').classList.add('hidden');
+            document.getElementById('pending-status').classList.remove('hidden');
+        }
+        
+        function showToast(message, type) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+        
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,382 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0
+// © SBS Model — Swing Breakout Sequence — Détection tendance SMA 20/220, points 1-6, entrée potentielle
+
+//@version=5
+indicator("SBS Model — Swing Breakout Sequence", overlay=true, max_boxes_count=50, max_lines_count=80, max_labels_count=100, max_polylines_count=10)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARAMÈTRES
+// ═══════════════════════════════════════════════════════════════════════════
+grpTrend = "📈 Tendance"
+sma20Len = input.int(20, "SMA 20", minval=1, group=grpTrend)
+sma220Len = input.int(220, "SMA 220", minval=1, group=grpTrend)
+trendStrict = input.bool(true, "Tendance stricte (SMA20 vs SMA220)", group=grpTrend, tooltip="Si true: haussier = prix > SMA20 et SMA20 > SMA220. Sinon: prix vs SMA20 seulement.")
+
+grpSwing = "📐 Swing & Pivots"
+pivotLen = input.int(5, "Pivot (gauche/droite) — swing high/low", minval=2, maxval=15, group=grpSwing)
+zonePct = input.float(0.003, "Zone point 2 (tolérance %) pour 4/5", minval=0.001, step=0.001, group=grpSwing)
+minBarsBetween = input.int(3, "Barres min entre pivots", minval=1, maxval=20, group=grpSwing)
+
+grpFib = "📐 Fibonacci"
+showFib = input.bool(true, "Afficher Fibonacci (pivot → point 3)", group=grpFib)
+showOTE = input.bool(true, "Afficher zone OTE (61.8%-78.6%) — entrée", group=grpFib)
+fibExtend = input.int(60, "Prolongation Fib (barres)", minval=10, maxval=150, group=grpFib)
+
+grpStyle = "🎨 Style"
+showSMA = input.bool(true, "Afficher SMA 20 / 220", group=grpStyle)
+showSwingLines = input.bool(true, "Afficher lignes Swing High/Low", group=grpStyle)
+colorBull = input.color(color.new(#26A69A, 0), "Tendance haussière", group=grpStyle)
+colorBear = input.color(color.new(#EF5350, 0), "Tendance baissière", group=grpStyle)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SMA & TENDANCE
+// ═══════════════════════════════════════════════════════════════════════════
+sma20 = ta.sma(close, sma20Len)
+sma220 = ta.sma(close, sma220Len)
+plot(showSMA ? sma20 : na, "SMA 20", color=color.new(#2196F3, 0), linewidth=2)
+plot(showSMA ? sma220 : na, "SMA 220", color=color.new(#FF9800, 0), linewidth=2)
+
+bullishTrend = trendStrict ? (close > sma20 and sma20 > sma220) : (close > sma20)
+bearishTrend = trendStrict ? (close < sma20 and sma20 < sma220) : (close < sma20)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PIVOTS — Swing High & Swing Low (قمة / قاع)
+// ═══════════════════════════════════════════════════════════════════════════
+pivH = ta.pivothigh(high, pivotLen, pivotLen)
+pivL = ta.pivotlow(low, pivotLen, pivotLen)
+
+var float refSwingHigh = na
+var float refSwingLow = na
+var int refSwingHighBar = 0
+var int refSwingLowBar = 0
+
+if not na(pivH)
+    refSwingHigh := pivH
+    refSwingHighBar := bar_index - pivotLen
+if not na(pivL)
+    refSwingLow := pivL
+    refSwingLowBar := bar_index - pivotLen
+
+// Niveaux de référence pour breakout (dernier swing confirmé)
+float swingHighLevel = refSwingHigh
+float swingLowLevel = refSwingLow
+
+// Lignes horizontales Swing High / Swing Low (une seule mise à jour par nouveau pivot)
+var line lineSwingH = na
+var line lineSwingL = na
+if showSwingLines and not na(pivH)
+    if not na(lineSwingH)
+        line.delete(lineSwingH)
+    lineSwingH := line.new(bar_index - pivotLen, pivH, bar_index - pivotLen + 80, pivH, color=color.new(#EF5350, 60), style=line.style_dotted)
+if showSwingLines and not na(pivL)
+    if not na(lineSwingL)
+        line.delete(lineSwingL)
+    lineSwingL := line.new(bar_index - pivotLen, pivL, bar_index - pivotLen + 80, pivL, color=color.new(#26A69A, 60), style=line.style_dotted)
+
+// Labels Swing High / Swing Low (une fois par nouveau pivot pour éviter spam)
+if not na(pivH) and showSwingLines
+    label.new(bar_index - pivotLen, pivH, "Swing high\n(قمة)", style=label.style_label_down, color=color.new(#EF5350, 30), textcolor=color.white, size=size.small)
+if not na(pivL) and showSwingLines
+    label.new(bar_index - pivotLen, pivL, "Swing low\n(قاع)", style=label.style_label_up, color=color.new(#26A69A, 30), textcolor=color.white, size=size.small)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SBS — État et points 1 à 6 (structure haussière)
+// ═══════════════════════════════════════════════════════════════════════════
+// Breakout haussier : clôture au-dessus du dernier swing high
+bool bullBreakout = not na(swingHighLevel) and ta.crossover(close, swingHighLevel)
+// Breakout baissier : clôture sous le dernier swing low
+bool bearBreakout = not na(swingLowLevel) and ta.crossunder(close, swingLowLevel)
+
+// Stockage des points SBS (haussier)
+var int p1_bar_bull = na
+var float p1_price_bull = na
+var int p2_bar_bull = na
+var float p2_price_bull = na
+var int p3_bar_bull = na
+var float p3_price_bull = na
+var int p4_bar_bull = na
+var float p4_price_bull = na
+var int p5_bar_bull = na
+var float p5_price_bull = na
+var int sbs_phase_bull = 0  // 0=attente breakout, 1=après 1, 2=après 2, 3=après 3, 4=après 4, 5=après 5
+var float fibBaseLowBull = na   // swing low de référence pour Fib (au breakout)
+
+// Stockage des points SBS (baissier)
+var int p1_bar_bear = na
+var float p1_price_bear = na
+var int p2_bar_bear = na
+var float p2_price_bear = na
+var int p3_bar_bear = na
+var float p3_price_bear = na
+var int p4_bar_bear = na
+var float p4_price_bear = na
+var int p5_bar_bear = na
+var float p5_price_bear = na
+var int sbs_phase_bear = 0
+var float fibBaseHighBear = na   // swing high de référence pour Fib (au breakout)
+
+// ——— Logique SBS HAUSSIER ———
+if bullishTrend
+    if bullBreakout and sbs_phase_bull == 0
+        p1_bar_bull := bar_index
+        p1_price_bull := high
+        fibBaseLowBull := refSwingLow
+        sbs_phase_bull := 1
+    else if sbs_phase_bull == 1 and not na(pivL) and (bar_index - pivotLen) > p1_bar_bull + minBarsBetween
+        p2_bar_bull := bar_index - pivotLen
+        p2_price_bull := pivL
+        sbs_phase_bull := 2
+    else if sbs_phase_bull == 2 and not na(pivH) and (bar_index - pivotLen) > p2_bar_bull + minBarsBetween and pivH > p1_price_bull
+        p3_bar_bull := bar_index - pivotLen
+        p3_price_bull := pivH
+        sbs_phase_bull := 3
+    else if sbs_phase_bull == 3 and not na(p2_price_bull)
+        float zone2Top = p2_price_bull * (1 + zonePct)
+        float zone2Bot = p2_price_bull * (1 - zonePct)
+        if low <= zone2Top and low >= zone2Bot and bar_index > p3_bar_bull
+            p4_bar_bull := bar_index
+            p4_price_bull := low
+            sbs_phase_bull := 4
+    else if sbs_phase_bull == 4 and not na(pivL) and (bar_index - pivotLen) > p4_bar_bull
+        float zone2Top = p2_price_bull * (1 + zonePct)
+        float zone2Bot = p2_price_bull * (1 - zonePct)
+        if pivL >= zone2Bot and pivL <= zone2Top
+            p5_bar_bull := bar_index - pivotLen
+            p5_price_bull := pivL
+            sbs_phase_bull := 5
+else
+    if bearBreakout
+        sbs_phase_bull := 0
+    else if not bullishTrend and bar_index > p1_bar_bull + 100
+        sbs_phase_bull := 0
+
+// ——— Logique SBS BAISSIER ———
+if bearishTrend
+    if bearBreakout and sbs_phase_bear == 0
+        p1_bar_bear := bar_index
+        p1_price_bear := low
+        fibBaseHighBear := refSwingHigh
+        sbs_phase_bear := 1
+    else if sbs_phase_bear == 1 and not na(pivH) and (bar_index - pivotLen) > p1_bar_bear + minBarsBetween
+        p2_bar_bear := bar_index - pivotLen
+        p2_price_bear := pivH
+        sbs_phase_bear := 2
+    else if sbs_phase_bear == 2 and not na(pivL) and (bar_index - pivotLen) > p2_bar_bear + minBarsBetween and pivL < p1_price_bear
+        p3_bar_bear := bar_index - pivotLen
+        p3_price_bear := pivL
+        sbs_phase_bear := 3
+    else if sbs_phase_bear == 3 and not na(p2_price_bear)
+        float zone2Top_b = p2_price_bear * (1 + zonePct)
+        float zone2Bot_b = p2_price_bear * (1 - zonePct)
+        if high >= zone2Bot_b and high <= zone2Top_b and bar_index > p3_bar_bear
+            p4_bar_bear := bar_index
+            p4_price_bear := high
+            sbs_phase_bear := 4
+    else if sbs_phase_bear == 4 and not na(pivH) and (bar_index - pivotLen) > p4_bar_bear
+        float zone2Top_b = p2_price_bear * (1 + zonePct)
+        float zone2Bot_b = p2_price_bear * (1 - zonePct)
+        if pivH >= zone2Bot_b and pivH <= zone2Top_b
+            p5_bar_bear := bar_index - pivotLen
+            p5_price_bear := pivH
+            sbs_phase_bear := 5
+else
+    if bullBreakout
+        sbs_phase_bear := 0
+    else if not bearishTrend and bar_index > p1_bar_bear + 100
+        sbs_phase_bear := 0
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AFFICHAGE DES POINTS SBS (labels 1 à 6) — Haussier
+// ═══════════════════════════════════════════════════════════════════════════
+// Point 1 — Breakout (confirmé sur la même barre)
+if not na(p1_bar_bull) and bar_index == p1_bar_bull
+    label.new(p1_bar_bull, high, "1\nBreakout\n(اختراق)", style=label.style_label_down, color=color.new(#2196F3, 20), textcolor=color.white, size=size.normal)
+// Point 2 — First Tap (pivot confirmé pivotLen barres après)
+if not na(p2_bar_bull) and bar_index == p2_bar_bull + pivotLen
+    label.new(p2_bar_bull, p2_price_bull, "2\nFirst Tap\n(التصحيح)", style=label.style_label_up, color=color.new(#FF9800, 20), textcolor=color.white, size=size.normal)
+// Point 3 — LQ Sweep (new high)
+if not na(p3_bar_bull) and bar_index == p3_bar_bull + pivotLen
+    label.new(p3_bar_bull, p3_price_bull, "3\nLQ Sweep\n(New High)", style=label.style_label_down, color=color.new(#9C27B0, 20), textcolor=color.white, size=size.normal)
+// Point 4 — Return to 2 for LQ
+if not na(p4_bar_bull) and bar_index == p4_bar_bull
+    label.new(p4_bar_bull, p4_price_bull, "4\nReturn to 2\n(LQ)", style=label.style_label_up, color=color.new(#00BCD4, 20), textcolor=color.white, size=size.normal)
+// Point 5 — Reversal (double bottom)
+if not na(p5_bar_bull) and bar_index == p5_bar_bull + pivotLen
+    label.new(p5_bar_bull, p5_price_bull, "5\nReversal\n(الإنعكاس)\nDouble bottom", style=label.style_label_up, color=color.new(#4CAF50, 20), textcolor=color.white, size=size.normal)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AFFICHAGE DES POINTS SBS — Baissier
+// ═══════════════════════════════════════════════════════════════════════════
+if not na(p1_bar_bear) and bar_index == p1_bar_bear
+    label.new(p1_bar_bear, low, "1\nBreakout\n(اختراق)", style=label.style_label_up, color=color.new(#2196F3, 20), textcolor=color.white, size=size.normal)
+if not na(p2_bar_bear) and bar_index == p2_bar_bear + pivotLen
+    label.new(p2_bar_bear, p2_price_bear, "2\nFirst Tap\n(التصحيح)", style=label.style_label_down, color=color.new(#FF9800, 20), textcolor=color.white, size=size.normal)
+if not na(p3_bar_bear) and bar_index == p3_bar_bear + pivotLen
+    label.new(p3_bar_bear, p3_price_bear, "3\nLQ Sweep\n(New Low)", style=label.style_label_up, color=color.new(#9C27B0, 20), textcolor=color.white, size=size.normal)
+if not na(p4_bar_bear) and bar_index == p4_bar_bear
+    label.new(p4_bar_bear, p4_price_bear, "4\nReturn to 2\n(LQ)", style=label.style_label_down, color=color.new(#00BCD4, 20), textcolor=color.white, size=size.normal)
+if not na(p5_bar_bear) and bar_index == p5_bar_bear + pivotLen
+    label.new(p5_bar_bear, p5_price_bear, "5\nReversal\n(الإنعكاس)", style=label.style_label_down, color=color.new(#F44336, 20), textcolor=color.white, size=size.normal)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIBONACCI (pivot → point 3) & ZONE OTE — Haussier
+// ═══════════════════════════════════════════════════════════════════════════
+// Fib haussier : depuis swing low (قاع) vers point 3 (new high)
+float fibLowBull = not na(fibBaseLowBull) ? fibBaseLowBull : refSwingLow
+float fibHighBull = not na(p3_price_bull) ? p3_price_bull : na
+float rangeBull = (fibHighBull - fibLowBull)
+int fibStartBarBull = not na(p3_bar_bull) ? p3_bar_bull : bar_index
+int fibEndBarBull = fibStartBarBull + fibExtend
+
+bool validFibBull = showFib and rangeBull > 0 and not na(fibLowBull) and not na(fibHighBull) and sbs_phase_bull >= 3
+float f236_b = fibLowBull + 0.236 * rangeBull
+float f382_b = fibLowBull + 0.382 * rangeBull
+float f500_b = fibLowBull + 0.5 * rangeBull
+float f618_b = fibLowBull + 0.618 * rangeBull
+float f786_b = fibLowBull + 0.786 * rangeBull
+float oteTopBull = f618_b
+float oteBotBull = f786_b
+
+plot(validFibBull and bar_index >= fibStartBarBull ? f236_b : na, "Fib 0.236", color=color.new(#9C27B0, 60))
+plot(validFibBull and bar_index >= fibStartBarBull ? f382_b : na, "Fib 0.382", color=color.new(#9C27B0, 60))
+plot(validFibBull and bar_index >= fibStartBarBull ? f500_b : na, "Fib 0.5", color=color.new(#9C27B0, 50))
+plot(validFibBull and bar_index >= fibStartBarBull ? f618_b : na, "Fib 0.618", color=color.new(#E91E63, 40))
+plot(validFibBull and bar_index >= fibStartBarBull ? f786_b : na, "Fib 0.786 OTE", color=color.new(#E91E63, 20))
+
+var box oteBoxBull = na
+if showOTE and validFibBull and sbs_phase_bull >= 4
+    if not na(oteBoxBull)
+        box.delete(oteBoxBull)
+    oteBoxBull := box.new(fibStartBarBull, oteTopBull, fibEndBarBull, oteBotBull, border_color=color.new(#4CAF50, 40), bgcolor=color.new(#4CAF50, 85))
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIBONACCI — Baissier (depuis swing high → point 3)
+// ═══════════════════════════════════════════════════════════════════════════
+float fibHighBear = not na(fibBaseHighBear) ? fibBaseHighBear : refSwingHigh
+float fibLowBear = not na(p3_price_bear) ? p3_price_bear : na
+float rangeBear = (fibHighBear - fibLowBear)
+int fibStartBarBear = not na(p3_bar_bear) ? p3_bar_bear : bar_index
+int fibEndBarBear = fibStartBarBear + fibExtend
+
+bool validFibBear = showFib and rangeBear > 0 and not na(fibHighBear) and not na(fibLowBear) and sbs_phase_bear >= 3
+float f236_s = fibHighBear - 0.236 * rangeBear
+float f382_s = fibHighBear - 0.382 * rangeBear
+float f500_s = fibHighBear - 0.5 * rangeBear
+float f618_s = fibHighBear - 0.618 * rangeBear
+float f786_s = fibHighBear - 0.786 * rangeBear
+float oteTopBear = f786_s
+float oteBotBear = f618_s
+
+plot(validFibBear and bar_index >= fibStartBarBear ? f236_s : na, "Fib 0.236 S", color=color.new(#9C27B0, 60))
+plot(validFibBear and bar_index >= fibStartBarBear ? f382_s : na, "Fib 0.382 S", color=color.new(#9C27B0, 60))
+plot(validFibBear and bar_index >= fibStartBarBear ? f500_s : na, "Fib 0.5 S", color=color.new(#9C27B0, 50))
+plot(validFibBear and bar_index >= fibStartBarBear ? f618_s : na, "Fib 0.618 S OTE", color=color.new(#E91E63, 40))
+plot(validFibBear and bar_index >= fibStartBarBear ? f786_s : na, "Fib 0.786 S", color=color.new(#E91E63, 20))
+
+var box oteBoxBear = na
+if showOTE and validFibBear and sbs_phase_bear >= 4
+    if not na(oteBoxBear)
+        box.delete(oteBoxBear)
+    oteBoxBear := box.new(fibStartBarBear, oteTopBear, fibEndBarBear, oteBotBear, border_color=color.new(#F44336, 40), bgcolor=color.new(#F44336, 85))
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENTRÉE POTENTIELLE & TARGET (6)
+// ═══════════════════════════════════════════════════════════════════════════
+// Long : entrée après point 5 dans la zone OTE (61.8-78.6%) ou au double bottom. Target = new swing high (au-dessus de 3).
+float entryLong = na
+float targetLong = na
+float slLong = na
+if sbs_phase_bull >= 5 and not na(p5_price_bull) and not na(oteBotBull) and not na(oteTopBull)
+    entryLong := math.max(oteBotBull, math.min(oteTopBull, p5_price_bull))  // entrée = zone OTE ou prix du point 5
+    slLong := p5_price_bull - (p3_price_bull - p5_price_bull) * 0.2  // SL sous point 5 avec marge
+    targetLong := p3_price_bull + (p3_price_bull - refSwingLow) * 0.5  // objectif au-dessus du point 3
+
+// Short : entrée après point 5, target = new swing low
+float entryShort = na
+float targetShort = na
+float slShort = na
+if sbs_phase_bear >= 5 and not na(p5_price_bear) and not na(oteBotBear) and not na(oteTopBear)
+    entryShort := math.min(oteTopBear, math.max(oteBotBear, p5_price_bear))
+    slShort := p5_price_bear + (p5_price_bear - p3_price_bear) * 0.2
+    targetShort := p3_price_bear - (refSwingHigh - p3_price_bear) * 0.5
+
+// Lignes et labels entrée / SL / Target (var pour éviter accumulation)
+var line lineEntryL = na
+var line lineSLL = na
+var line lineTgtL = na
+var label labelEntryL = na
+var label labelTgtL = na
+var label labelSLL = na
+var line lineEntryS = na
+var line lineSLS = na
+var line lineTgtS = na
+var label labelEntryS = na
+var label labelTgtS = na
+var label labelSLS = na
+int ext = bar_index + 40
+if not na(entryLong) and not na(targetLong) and not na(slLong)
+    if not na(lineEntryL)
+        line.delete(lineEntryL)
+    if not na(lineSLL)
+        line.delete(lineSLL)
+    if not na(lineTgtL)
+        line.delete(lineTgtL)
+    if not na(labelEntryL)
+        label.delete(labelEntryL)
+    if not na(labelTgtL)
+        label.delete(labelTgtL)
+    if not na(labelSLL)
+        label.delete(labelSLL)
+    lineEntryL := line.new(p5_bar_bull, entryLong, ext, entryLong, color=color.new(#4CAF50, 0), width=2)
+    lineSLL := line.new(p5_bar_bull, slLong, ext, slLong, color=color.new(#F44336, 0), width=2)
+    lineTgtL := line.new(p5_bar_bull, targetLong, ext, targetLong, color=color.new(#2196F3, 0), width=2)
+    line.set_style(lineEntryL, line.style_solid)
+    line.set_style(lineSLL, line.style_solid)
+    line.set_style(lineTgtL, line.style_solid)
+    labelEntryL := label.new(ext, entryLong, "ENTRÉE\nLong (zone OTE/5)", style=label.style_label_left, color=color.new(#4CAF50, 20), textcolor=color.white, size=size.small)
+    labelTgtL := label.new(ext, targetLong, "6 Target\n(New swing high)", style=label.style_label_left, color=color.new(#2196F3, 20), textcolor=color.white, size=size.small)
+    labelSLL := label.new(ext, slLong, "SL", style=label.style_label_left, color=color.new(#F44336, 20), textcolor=color.white, size=size.small)
+
+if not na(entryShort) and not na(targetShort) and not na(slShort)
+    if not na(lineEntryS)
+        line.delete(lineEntryS)
+    if not na(lineSLS)
+        line.delete(lineSLS)
+    if not na(lineTgtS)
+        line.delete(lineTgtS)
+    if not na(labelEntryS)
+        label.delete(labelEntryS)
+    if not na(labelTgtS)
+        label.delete(labelTgtS)
+    if not na(labelSLS)
+        label.delete(labelSLS)
+    lineEntryS := line.new(p5_bar_bear, entryShort, ext, entryShort, color=color.new(#F44336, 0), width=2)
+    lineSLS := line.new(p5_bar_bear, slShort, ext, slShort, color=color.new(#4CAF50, 0), width=2)
+    lineTgtS := line.new(p5_bar_bear, targetShort, ext, targetShort, color=color.new(#2196F3, 0), width=2)
+    line.set_style(lineEntryS, line.style_solid)
+    line.set_style(lineSLS, line.style_solid)
+    line.set_style(lineTgtS, line.style_solid)
+    labelEntryS := label.new(ext, entryShort, "ENTRÉE\nShort (zone OTE/5)", style=label.style_label_left, color=color.new(#F44336, 20), textcolor=color.white, size=size.small)
+    labelTgtS := label.new(ext, targetShort, "6 Target\n(New swing low)", style=label.style_label_left, color=color.new(#2196F3, 20), textcolor=color.white, size=size.small)
+    labelSLS := label.new(ext, slShort, "SL", style=label.style_label_left, color=color.new(#4CAF50, 20), textcolor=color.white, size=size.small)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLEAU RÉCAP — Tendance + Phase SBS
+// ═══════════════════════════════════════════════════════════════════════════
+var table infoTable = na
+if na(infoTable)
+    infoTable := table.new(position.top_right, 2, 8, bgcolor=color.new(#1a1a2e, 80), border_width=1)
+table.cell(infoTable, 0, 0, "SBS Model", text_color=color.yellow, text_size=size.normal)
+table.cell(infoTable, 1, 0, "Swing Breakout Sequence", text_color=color.white, text_size=size.tiny)
+table.cell(infoTable, 0, 1, "Tendance", text_color=color.gray, text_size=size.small)
+table.cell(infoTable, 1, 1, bullishTrend ? "Haussière (قمة/قاع)" : bearishTrend ? "Baissière (الاتجاه الهابط)" : "Indécise", text_color=bullishTrend ? colorBull : bearishTrend ? colorBear : color.gray, text_size=size.small)
+table.cell(infoTable, 0, 2, "Phase SBS Long", text_color=color.gray, text_size=size.small)
+table.cell(infoTable, 1, 2, str.tostring(sbs_phase_bull) + " / 5", text_color=color.white, text_size=size.small)
+table.cell(infoTable, 0, 3, "Phase SBS Short", text_color=color.gray, text_size=size.small)
+table.cell(infoTable, 1, 3, str.tostring(sbs_phase_bear) + " / 5", text_color=color.white, text_size=size.small)
+table.cell(infoTable, 0, 4, "Swing High", text_color=color.gray, text_size=size.small)
+table.cell(infoTable, 1, 4, str.tostring(swingHighLevel, format.mintick), text_color=color.white, text_size=size.small)
+table.cell(infoTable, 0, 5, "Swing Low", text_color=color.gray, text_size=size.small)
+table.cell(infoTable, 1, 5, str.tostring(swingLowLevel, format.mintick), text_color=color.white, text_size=size.small)
+table.cell(infoTable, 0, 6, "Fixed Risk", text_color=color.gray, text_size=size.small)
+table.cell(infoTable, 1, 6, "SL & TP (objectif clair)", text_color=color.new(#FF5252, 0), text_size=size.tiny)

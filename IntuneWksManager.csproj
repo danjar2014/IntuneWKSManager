@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>IntuneWksManager</RootNamespace>
+    <!-- NETSDK1194 : ne pas utiliser l'option output avec dotnet build sur la solution -->
+    <NoWarn>$(NoWarn);NETSDK1194</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Graph" Version="5.56.0" />
+    <PackageReference Include="Azure.Identity" Version="1.12.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.61.3" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="2.17.0" />
+    <PackageReference Include="Microsoft.Identity.Web.UI" Version="2.17.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="Config\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Activer les logs stdout et créer logs/ après _TransformWebConfig (sinon il écrase notre patch) -->
+  <Target Name="EnablePublishLogging" AfterTargets="_TransformWebConfig">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)Scripts\patch-webconfig.ps1&quot; -PublishDir &quot;$(PublishDir)&quot;" Condition="Exists('$(PublishDir)web.config')" />
+  </Target>
+
+</Project>

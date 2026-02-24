@@ -1,0 +1,272 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0
+// © SBS — Swing Breakout Sequence — Détection tendance, 6 points, lignes, labels, flèche entrée
+
+//@version=5
+indicator("SBS — Swing Breakout Sequence", overlay=true, max_boxes_count=50, max_lines_count=100, max_labels_count=150, max_polylines_count=20)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARAMÈTRES CORE (User Input)
+// ═══════════════════════════════════════════════════════════════════════════
+grpCore = "Core Parameters"
+pivotLookback = input.int(2, "Pivot Lookback Period", minval=1, maxval=10, group=grpCore, tooltip="Barres à gauche/droite pour détecter un pivot high/low.")
+minPatternHeightPct = input.float(0.1, "Minimum Pattern Height %", minval=0.01, step=0.05, group=grpCore, tooltip="Hauteur min du pattern en % du prix (filtre les patterns trop plats).")
+maxPatternWidth = input.int(50, "Maximum Pattern Width (bars)", minval=10, maxval=200, group=grpCore, tooltip="Largeur max du pattern en barres.")
+
+// Tendance (choix du plan à afficher)
+grpTrend = "Tendance"
+sma20Len = input.int(20, "SMA 20", minval=1, group=grpTrend)
+sma220Len = input.int(220, "SMA 220", minval=1, group=grpTrend)
+trendStrict = input.bool(true, "Tendance stricte (SMA20 vs SMA220)", group=grpTrend)
+showOnlyTrendPlan = input.bool(true, "Afficher uniquement le plan de la tendance actuelle", group=grpTrend, tooltip="Si activé: haussier → seulement pattern Bullish SBS ; baissier → seulement Bearish SBS.")
+
+// Style & visuels
+grpStyle = "Style"
+showConnectingLines = input.bool(true, "Lignes de connexion entre points", group=grpStyle)
+showPointLabels = input.bool(true, "Labels numériques sur les points (0,1,2,3,5,5)", group=grpStyle)
+showBreakoutArrow = input.bool(true, "Flèche breakout (↑ haussier / ↓ baissier)", group=grpStyle)
+colorBull = input.color(color.new(#26A69A, 0), "Couleur pattern haussier", group=grpStyle)
+colorBear = input.color(color.new(#EF5350, 0), "Couleur pattern baissier", group=grpStyle)
+zonePct = input.float(0.003, "Zone point 2 — tolérance % pour points 4 et 5", minval=0.001, step=0.001, group=grpStyle)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TENDANCE
+// ═══════════════════════════════════════════════════════════════════════════
+sma20 = ta.sma(close, sma20Len)
+sma220 = ta.sma(close, sma220Len)
+bullishTrend = trendStrict ? (close > sma20 and sma20 > sma220) : (close > sma20)
+bearishTrend = trendStrict ? (close < sma20 and sma20 < sma220) : (close < sma20)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PIVOTS — Swing High / Swing Low
+// ═══════════════════════════════════════════════════════════════════════════
+pivH = ta.pivothigh(high, pivotLookback, pivotLookback)
+pivL = ta.pivotlow(low, pivotLookback, pivotLookback)
+int pivHBar = bar_index - pivotLookback
+int pivLBar = bar_index - pivotLookback
+
+// Référence dernier swing (pour breakout)
+var float refSwingHigh = na
+var float refSwingLow = na
+if not na(pivH)
+    refSwingHigh := pivH
+if not na(pivL)
+    refSwingLow := pivL
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SBS BULLISH — 6 points: Low(0), HH(1), LL(2)>Low, New HH(3), LL(5), LL(5)
+// ═══════════════════════════════════════════════════════════════════════════
+var int p0_bar_bull = na
+var float p0_price_bull = na
+var int p1_bar_bull = na
+var float p1_price_bull = na
+var int p2_bar_bull = na
+var float p2_price_bull = na
+var int p3_bar_bull = na
+var float p3_price_bull = na
+var int p4_bar_bull = na
+var float p4_price_bull = na
+var int p5_bar_bull = na
+var float p5_price_bull = na
+var int phase_bull = 0  // 0..6
+
+// Haussier: la PENTE (montée vers 3) crée la nouvelle CREUX (4, 5). Breakout = rupture au-dessus du point 3 (New HH).
+bool bullBreakoutRef = not na(refSwingHigh) and ta.crossover(close, refSwingHigh)
+bool bullBreakoutSBS = not na(p3_price_bull) and ta.crossover(close, p3_price_bull)  // niveau du pattern
+bool bullBreakout = (phase_bull >= 6 and bullBreakoutSBS) or (phase_bull < 6 and bullBreakoutRef)
+
+if bullishTrend or not showOnlyTrendPlan
+    if phase_bull == 0 and not na(pivL)
+        p0_bar_bull := pivLBar
+        p0_price_bull := pivL
+        phase_bull := 1
+    else if phase_bull == 1 and not na(pivH) and pivHBar > p0_bar_bull and pivH > p0_price_bull
+        p1_bar_bull := pivHBar
+        p1_price_bull := pivH
+        phase_bull := 2
+    else if phase_bull == 2 and not na(pivL) and pivLBar > p1_bar_bull and pivL > p0_price_bull  // LL(2) higher than initial Low
+        p2_bar_bull := pivLBar
+        p2_price_bull := pivL
+        phase_bull := 3
+    else if phase_bull == 3 and not na(pivH) and pivHBar > p2_bar_bull and pivH > p1_price_bull   // New HH(3)
+        p3_bar_bull := pivHBar
+        p3_price_bull := pivH
+        phase_bull := 4
+    else if phase_bull == 4
+        if not na(p2_price_bull)
+            float z2Top = p2_price_bull * (1 + zonePct)
+            float z2Bot = p2_price_bull * (1 - zonePct)
+            if low <= z2Top and low >= z2Bot and bar_index > p3_bar_bull
+                p4_bar_bull := bar_index
+                p4_price_bull := low
+                phase_bull := 5
+    else if phase_bull == 5
+        if not na(pivL) and pivLBar > p4_bar_bull
+            float z2Top = p2_price_bull * (1 + zonePct)
+            float z2Bot = p2_price_bull * (1 - zonePct)
+            if pivL >= z2Bot and pivL <= z2Top
+                p5_bar_bull := pivLBar
+                p5_price_bull := pivL
+                phase_bull := 6  // séquence complète
+    else if phase_bull == 6
+        if bullBreakout
+            phase_bull := 0
+        else if bar_index - p0_bar_bull > maxPatternWidth
+            phase_bull := 0
+    if phase_bull >= 1 and phase_bull <= 5 and bar_index - p0_bar_bull > maxPatternWidth
+        phase_bull := 0
+else
+    if bullBreakout or (bearishTrend and showOnlyTrendPlan)
+        phase_bull := 0
+    else if phase_bull > 0 and bar_index - p0_bar_bull > maxPatternWidth
+        phase_bull := 0
+
+// Filtres hauteur / largeur pour pattern bull validé
+float heightBull = phase_bull >= 6 ? (p3_price_bull - p2_price_bull) : 0.0
+int widthBull = phase_bull >= 6 ? (p5_bar_bull - p0_bar_bull) : 0
+float minHeightBull = (p0_price_bull + p3_price_bull) / 2.0 * (minPatternHeightPct / 100.0)
+bool validBull = phase_bull == 6 and heightBull >= minHeightBull and widthBull <= maxPatternWidth
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SBS BEARISH — 6 points: High(0), LL(1), HH(2)<High, New LL(3), HH(5), HH(5)
+// ═══════════════════════════════════════════════════════════════════════════
+var int p0_bar_bear = na
+var float p0_price_bear = na
+var int p1_bar_bear = na
+var float p1_price_bear = na
+var int p2_bar_bear = na
+var float p2_price_bear = na
+var int p3_bar_bear = na
+var float p3_price_bear = na
+var int p4_bar_bear = na
+var float p4_price_bear = na
+var int p5_bar_bear = na
+var float p5_price_bear = na
+var int phase_bear = 0
+
+// Baissier: la DERNIÈRE CREUX (point 3 = New LL) crée la nouvelle PENTE. Breakout = rupture sous le point 3 (New LL).
+bool bearBreakoutRef = not na(refSwingLow) and ta.crossunder(close, refSwingLow)
+bool bearBreakoutSBS = not na(p3_price_bear) and ta.crossunder(close, p3_price_bear)  // niveau du pattern
+bool bearBreakout = (phase_bear >= 6 and bearBreakoutSBS) or (phase_bear < 6 and bearBreakoutRef)
+
+if bearishTrend or not showOnlyTrendPlan
+    if phase_bear == 0 and not na(pivH)
+        p0_bar_bear := pivHBar
+        p0_price_bear := pivH
+        phase_bear := 1
+    else if phase_bear == 1 and not na(pivL) and pivLBar > p0_bar_bear and pivL < p0_price_bear
+        p1_bar_bear := pivLBar
+        p1_price_bear := pivL
+        phase_bear := 2
+    else if phase_bear == 2 and not na(pivH) and pivHBar > p1_bar_bear and pivH < p0_price_bear  // HH(2) lower than initial High
+        p2_bar_bear := pivHBar
+        p2_price_bear := pivH
+        phase_bear := 3
+    else if phase_bear == 3 and not na(pivL) and pivLBar > p2_bar_bear and pivL < p1_price_bear   // New LL(3)
+        p3_bar_bear := pivLBar
+        p3_price_bear := pivL
+        phase_bear := 4
+    else if phase_bear == 4
+        if not na(p2_price_bear)
+            float z2TopB = p2_price_bear * (1 + zonePct)
+            float z2BotB = p2_price_bear * (1 - zonePct)
+            if high >= z2BotB and high <= z2TopB and bar_index > p3_bar_bear
+                p4_bar_bear := bar_index
+                p4_price_bear := high
+                phase_bear := 5
+    else if phase_bear == 5
+        if not na(pivH) and pivHBar > p4_bar_bear
+            float z2TopB = p2_price_bear * (1 + zonePct)
+            float z2BotB = p2_price_bear * (1 - zonePct)
+            if pivH >= z2BotB and pivH <= z2TopB
+                p5_bar_bear := pivHBar
+                p5_price_bear := pivH
+                phase_bear := 6
+    else if phase_bear == 6
+        if bearBreakout
+            phase_bear := 0
+        else if bar_index - p0_bar_bear > maxPatternWidth
+            phase_bear := 0
+    if phase_bear >= 1 and phase_bear <= 5 and bar_index - p0_bar_bear > maxPatternWidth
+        phase_bear := 0
+else
+    if bearBreakout or (bullishTrend and showOnlyTrendPlan)
+        phase_bear := 0
+    else if phase_bear > 0 and bar_index - p0_bar_bear > maxPatternWidth
+        phase_bear := 0
+
+float heightBear = phase_bear >= 6 ? (p2_price_bear - p3_price_bear) : 0.0
+int widthBear = phase_bear >= 6 ? (p5_bar_bear - p0_bar_bear) : 0
+float minHeightBear = (p0_price_bear + p3_price_bear) / 2.0 * (minPatternHeightPct / 100.0)
+bool validBear = phase_bear == 6 and heightBear >= minHeightBear and widthBear <= maxPatternWidth
+
+// Barre de complétion = quand le point 5 est confirmé (lignes + labels)
+bool completionBarBull = validBull and (bar_index == p5_bar_bull + pivotLookback)
+bool completionBarBear = validBear and (bar_index == p5_bar_bear + pivotLookback)
+// Barre de breakout = rupture du niveau du point 3 (flèche: haussier au-dessus de 3, baissier sous 3)
+bool breakoutBarBull = validBull and bullBreakoutSBS   // pente crée la creux → breakout au-dessus de 3
+bool breakoutBarBear = validBear and bearBreakoutSBS   // dernière creux crée la pente → breakout sous 3
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUALISATION — Lignes de connexion (uniquement à la complétion)
+// ═══════════════════════════════════════════════════════════════════════════
+if completionBarBull and showConnectingLines
+    line.new(p0_bar_bull, p0_price_bull, p1_bar_bull, p1_price_bull, color=colorBull)
+    line.new(p1_bar_bull, p1_price_bull, p2_bar_bull, p2_price_bull, color=colorBull)
+    line.new(p2_bar_bull, p2_price_bull, p3_bar_bull, p3_price_bull, color=colorBull)
+    line.new(p3_bar_bull, p3_price_bull, p4_bar_bull, p4_price_bull, color=colorBull)
+    line.new(p4_bar_bull, p4_price_bull, p5_bar_bull, p5_price_bull, color=colorBull)
+
+if completionBarBear and showConnectingLines
+    line.new(p0_bar_bear, p0_price_bear, p1_bar_bear, p1_price_bear, color=colorBear)
+    line.new(p1_bar_bear, p1_price_bear, p2_bar_bear, p2_price_bear, color=colorBear)
+    line.new(p2_bar_bear, p2_price_bear, p3_bar_bear, p3_price_bear, color=colorBear)
+    line.new(p3_bar_bear, p3_price_bear, p4_bar_bear, p4_price_bear, color=colorBear)
+    line.new(p4_bar_bear, p4_price_bear, p5_bar_bear, p5_price_bear, color=colorBear)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LABELS NUMÉRIQUES (0, 1, 2, 3, 5, 5) — à la complétion
+// ═══════════════════════════════════════════════════════════════════════════
+if completionBarBull and showPointLabels
+    label.new(p0_bar_bull, p0_price_bull, "0", style=label.style_label_up, color=colorBull, textcolor=color.white, size=size.small)
+    label.new(p1_bar_bull, p1_price_bull, "1", style=label.style_label_down, color=colorBull, textcolor=color.white, size=size.small)
+    label.new(p2_bar_bull, p2_price_bull, "2", style=label.style_label_up, color=colorBull, textcolor=color.white, size=size.small)
+    label.new(p3_bar_bull, p3_price_bull, "3", style=label.style_label_down, color=colorBull, textcolor=color.white, size=size.small)
+    label.new(p4_bar_bull, p4_price_bull, "5", style=label.style_label_up, color=colorBull, textcolor=color.white, size=size.small)
+    label.new(p5_bar_bull, p5_price_bull, "5", style=label.style_label_up, color=colorBull, textcolor=color.white, size=size.small)
+
+if completionBarBear and showPointLabels
+    label.new(p0_bar_bear, p0_price_bear, "0", style=label.style_label_down, color=colorBear, textcolor=color.white, size=size.small)
+    label.new(p1_bar_bear, p1_price_bear, "1", style=label.style_label_up, color=colorBear, textcolor=color.white, size=size.small)
+    label.new(p2_bar_bear, p2_price_bear, "2", style=label.style_label_down, color=colorBear, textcolor=color.white, size=size.small)
+    label.new(p3_bar_bear, p3_price_bear, "3", style=label.style_label_up, color=colorBear, textcolor=color.white, size=size.small)
+    label.new(p4_bar_bear, p4_price_bear, "5", style=label.style_label_down, color=colorBear, textcolor=color.white, size=size.small)
+    label.new(p5_bar_bear, p5_price_bear, "5", style=label.style_label_down, color=colorBear, textcolor=color.white, size=size.small)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLÈCHE BREAKOUT — sur la barre de rupture du niveau point 3 (entrée potentielle)
+// Haussier: flèche ↑ quand close casse au-dessus du New HH (3) — la pente a créé la creux (4,5)
+// Baissier: flèche ↓ quand close casse sous le New LL (3) — la dernière creux crée la nouvelle pente
+// ═══════════════════════════════════════════════════════════════════════════
+if breakoutBarBull and showBreakoutArrow
+    label.new(bar_index, math.max(high, p3_price_bull), "↑", style=label.style_label_down, color=color.new(colorBull, 0), textcolor=color.white, size=size.large)
+if breakoutBarBear and showBreakoutArrow
+    label.new(bar_index, math.min(low, p3_price_bear), "↓", style=label.style_label_up, color=color.new(colorBear, 0), textcolor=color.white, size=size.large)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ALERTES
+// ═══════════════════════════════════════════════════════════════════════════
+alertcondition(validBull and bullBreakoutSBS, "SBS Bullish Breakout", "SBS: rupture au-dessus du point 3 (New HH) — entrée Long")
+alertcondition(validBear and bearBreakoutSBS, "SBS Bearish Breakout", "SBS: rupture sous le point 3 (New LL) — dernière creux crée la pente — entrée Short")
+
+// Tableau récap
+var table tbl = table.new(position.top_right, 2, 6, bgcolor=color.new(#1a1a2e, 80), border_width=1)
+table.cell(tbl, 0, 0, "SBS", text_color=color.yellow, text_size=size.small)
+table.cell(tbl, 1, 0, "Swing Breakout Sequence", text_color=color.white, text_size=size.tiny)
+table.cell(tbl, 0, 1, "Tendance", text_color=color.gray, text_size=size.small)
+table.cell(tbl, 1, 1, bullishTrend ? "Haussier" : bearishTrend ? "Baissier" : "Indécise", text_color=bullishTrend ? colorBull : bearishTrend ? colorBear : color.gray, text_size=size.small)
+table.cell(tbl, 0, 2, "Plan affiché", text_color=color.gray, text_size=size.small)
+table.cell(tbl, 1, 2, showOnlyTrendPlan ? (bullishTrend ? "Bullish SBS" : bearishTrend ? "Bearish SBS" : "—") : "Bullish + Bearish", text_color=color.white, text_size=size.small)
+table.cell(tbl, 0, 3, "Pattern Bull", text_color=color.gray, text_size=size.small)
+table.cell(tbl, 1, 3, validBull ? "Complet (0-1-2-3-5-5)" : phase_bull > 0 ? str.tostring(phase_bull) + "/6" : "—", text_color=validBull ? colorBull : color.white, text_size=size.small)
+table.cell(tbl, 0, 4, "Pattern Bear", text_color=color.gray, text_size=size.small)
+table.cell(tbl, 1, 4, validBear ? "Complet (0-1-2-3-5-5)" : phase_bear > 0 ? str.tostring(phase_bear) + "/6" : "—", text_color=validBear ? colorBear : color.white, text_size=size.small)

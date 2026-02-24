@@ -1,0 +1,67 @@
+@page
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IntuneWksManager - Chargement...</title>
+    <base href="@Url.Content("~/")" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .loader {
+            text-align: center;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.2);
+            border-top-color: #0078d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @@keyframes spin { to { transform: rotate(360deg); } }
+        .loader h2 { font-weight: 400; opacity: 0.9; }
+    </style>
+</head>
+<body>
+    <div class="loader">
+        <div class="spinner"></div>
+        <h2>Vérification des accès...</h2>
+    </div>
+    <script>
+        const basePath = (document.querySelector('base')?.getAttribute('href') || '/').replace(/\/?$/, '/');
+        
+        fetch(`${basePath}api/auth/status`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.isAuthenticated) {
+                    window.location.href = basePath + 'MicrosoftIdentity/Account/SignIn';
+                } else if (data.user?.isPrimaryAdmin) {
+                    window.location.href = basePath + 'Admin';
+                } else if (data.isAuthorized) {
+                    window.location.href = basePath + 'Operator';
+                } else {
+                    window.location.href = basePath + 'AccessRequest';
+                }
+            })
+            .catch(() => {
+                window.location.href = basePath + 'MicrosoftIdentity/Account/SignIn';
+            });
+    </script>
+</body>
+</html>

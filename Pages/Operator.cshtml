@@ -1,0 +1,272 @@
+@page
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IntuneWksManager - Opérateur</title>
+    <base href="@Url.Content("~/")" />
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="js/icons.js"></script>
+    <script src="js/theme.js"></script>
+</head>
+<body>
+    <div id="toast-container" class="toast-container"></div>
+    
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">IW</div>
+                <div>
+                    <div class="sidebar-title">IntuneWksManager</div>
+                    <div class="sidebar-subtitle" id="user-role-display">Opérateur</div>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav" id="nav-menu">
+                <div class="nav-section">
+                    <div class="nav-section-title" data-i18n="navGeneral">Général</div>
+                    <a class="nav-item active" data-page="dashboard" data-icon="dashboard"><span class="nav-item-icon"></span><span data-i18n="navDashboard">Tableau de bord</span></a>
+                </div>
+                <div class="nav-section" id="nav-intune">
+                    <div class="nav-section-title" data-i18n="navIntune">Intune</div>
+                    <a class="nav-item" data-page="devices" data-permission="devices.read" data-icon="devices"><span class="nav-item-icon"></span><span data-i18n="navDevices">Appareils</span></a>
+                    <a class="nav-item" data-page="users" data-permission="users.read" data-icon="users"><span class="nav-item-icon"></span><span data-i18n="navUsers">Utilisateurs</span></a>
+                    <a class="nav-item" data-page="apps" data-permission="apps.read" data-icon="apps"><span class="nav-item-icon"></span><span data-i18n="navApps">Applications</span></a>
+                    <a class="nav-item" data-page="reports" data-permission-reports="reports.read,reports.compliance,reports.devices,reports.apps" data-icon="chart"><span class="nav-item-icon"></span><span data-i18n="navReports">Rapports</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title" data-i18n="navSystem">Système</div>
+                    <a class="nav-item" data-page="settings" data-icon="settings"><span class="nav-item-icon"></span><span data-i18n="navSettings">Paramètres</span></a>
+                </div>
+            </nav>
+            <!-- Stockage et Graph masqués pour l'admin secondaire (réservés à l'admin principal) -->
+        </aside>
+        
+        <main class="main-content">
+            <header class="main-header">
+                <h1 id="header-title" class="header-title" data-i18n="headerDashboard">Tableau de bord</h1>
+                <div class="header-actions">
+                    <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Basculer le thème"></button>
+                    <div class="user-menu">
+                        <div class="user-avatar" id="user-avatar">O</div>
+                        <div class="user-info">
+                            <div class="user-name" id="current-user-name">Opérateur</div>
+                            <div class="user-role" id="current-user-role">-</div>
+                        </div>
+                        <a href="MicrosoftIdentity/Account/SignOut" class="btn btn-ghost btn-sm ml-auto" data-i18n="signOut">Déconnexion</a>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="content-area">
+                <!-- Dashboard -->
+                <div id="page-dashboard" class="page-content">
+                    <div class="page-header">
+                        <div>
+                            <h2 class="page-title" data-i18n="welcome">Bienvenue</h2>
+                            <p class="page-subtitle" id="welcome-msg">Portail Opérateur IntuneWksManager</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-2 mb-4">
+                        <div class="stat-card">
+                            <div class="stat-icon green" data-icon="statDevices"></div>
+                            <div class="stat-content">
+                                <div id="stat-devices" class="stat-value">-</div>
+                                <div class="stat-label" data-i18n="statDevices">Appareils accessibles</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon cyan">⚡</div>
+                            <div class="stat-content">
+                                <div id="stat-actions" class="stat-value">0</div>
+                                <div class="stat-label" data-i18n="statActions">Actions autorisées</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header"><h3 class="card-title" data-i18n="yourPermissions">Vos permissions</h3></div>
+                        <div class="card-body" id="my-permissions"></div>
+                    </div>
+                </div>
+                
+                <!-- Devices -->
+                <div id="page-devices" class="page-content hidden">
+                    <div class="page-header">
+                        <div><h2 class="page-title" data-i18n="devicesTitle">Appareils</h2><p class="page-subtitle" data-i18n="devicesSubtitle">Recherche par nom, utilisateur ou OS • Filtre par type</p></div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                            <select id="devices-type-filter" class="form-select" style="max-width:140px;"></select>
+                            <input type="text" id="devices-search" class="form-input" data-i18n-placeholder="searchPlaceholder" placeholder="Rechercher…" style="max-width:220px;min-width:180px;" autocomplete="off" />
+                            <button class="btn btn-secondary" onclick="loadDevices()"><span class="btn-icon" data-icon="refresh"></span> <span data-i18n="refresh">Actualiser</span></button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="table-container">
+                            <table>
+                                <thead><tr><th data-i18n="thName">Nom</th><th data-i18n="thUser">Utilisateur</th><th data-i18n="thOS">OS</th><th data-i18n="thCompliance">Conformité</th><th data-i18n="thLastSync">Dernière sync</th><th data-i18n="thActions">Actions</th></tr></thead>
+                                <tbody id="devices-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Users -->
+                <div id="page-users" class="page-content hidden">
+                    <div class="page-header"><div><h2 class="page-title" data-i18n="usersTitle">Utilisateurs Azure AD</h2></div></div>
+                    <div class="card">
+                        <div class="table-container">
+                            <table>
+                                <thead><tr><th data-i18n="thName">Nom</th><th data-i18n="thUPN">UPN</th><th data-i18n="thEmail">Email</th><th data-i18n="thDepartment">Département</th></tr></thead>
+                                <tbody id="users-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Apps -->
+                <div id="page-apps" class="page-content hidden">
+                    <div class="page-header">
+                        <div><h2 class="page-title" data-i18n="appsTitle">Applications</h2><p class="page-subtitle" data-i18n="appsSubtitle">Recherche par nom ou éditeur</p></div>
+                        <input type="text" id="apps-search" class="form-input" data-i18n-placeholder="searchPlaceholder" placeholder="Rechercher…" style="max-width:220px;min-width:180px;" autocomplete="off" />
+                    </div>
+                    <div class="card">
+                        <div class="table-container">
+                            <table>
+                                <thead><tr><th data-i18n="thName">Nom</th><th data-i18n="thPublisher">Éditeur</th><th data-i18n="thType">Type</th><th data-i18n="thCreated">Date création</th></tr></thead>
+                                <tbody id="apps-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Reports -->
+                <div id="page-reports" class="page-content hidden">
+                    <div class="page-header">
+                        <div><h2 class="page-title" data-i18n="reportsTitle">Rapports</h2><p class="page-subtitle" data-i18n="reportsSubtitle">Tableaux de bord et statistiques</p></div>
+                        <button class="btn btn-secondary" onclick="loadReports()"><span class="btn-icon" data-icon="refresh"></span> <span data-i18n="refresh">Actualiser</span></button>
+                    </div>
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div style="display:flex;gap:0.5rem;border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;margin-bottom:1rem;">
+                                <button class="btn btn-ghost" onclick="showReportTab('compliance')" id="tab-compliance" data-i18n="reportTabCompliance">Rapport de conformité</button>
+                                <button class="btn btn-ghost" onclick="showReportTab('devices')" id="tab-devices" data-i18n="reportTabDevices">Rapport des appareils</button>
+                                <button class="btn btn-ghost" onclick="showReportTab('apps')" id="tab-apps" data-i18n="reportTabApps">Rapport des applications</button>
+                            </div>
+                            <div id="report-compliance" class="report-section">
+                                <h3 class="mb-3" data-i18n="reportTabCompliance">Rapport de conformité</h3>
+                                <div class="grid grid-3 mb-4">
+                                    <div class="stat-card"><div class="stat-icon green" data-icon="statDevices"></div><div class="stat-content"><div id="report-compliant-count" class="stat-value">-</div><div class="stat-label" data-i18n="reportCompliant">Appareils conformes</div></div></div>
+                                    <div class="stat-card"><div class="stat-icon orange" data-icon="statDevices"></div><div class="stat-content"><div id="report-noncompliant-count" class="stat-value">-</div><div class="stat-label" data-i18n="reportNonCompliant">Appareils non conformes</div></div></div>
+                                    <div class="stat-card"><div class="stat-icon blue" data-icon="statDevices"></div><div class="stat-content"><div id="report-compliant-percent" class="stat-value">-</div><div class="stat-label" data-i18n="reportComplianceRate">Taux de conformité</div></div></div>
+                                </div>
+                                <div class="card"><div class="card-header"><h3 data-i18n="reportDetailsByDevice">Détails par appareil</h3></div><div class="table-container"><table><thead><tr><th data-i18n="thDevice">Appareil</th><th data-i18n="thUser">Utilisateur</th><th data-i18n="thOS">OS</th><th data-i18n="thComplianceState">État de conformité</th><th data-i18n="thLastSync">Dernière synchronisation</th></tr></thead><tbody id="compliance-table-body"></tbody></table></div></div>
+                            </div>
+                            <div id="report-devices" class="report-section hidden">
+                                <h3 class="mb-3" data-i18n="reportTabDevices">Rapport des appareils</h3>
+                                <div class="grid grid-4 mb-4">
+                                    <div class="stat-card"><div class="stat-icon blue" data-icon="statDevices"></div><div class="stat-content"><div id="report-devices-total" class="stat-value">-</div><div class="stat-label" data-i18n="reportTotalDevices">Total appareils</div></div></div>
+                                    <div class="stat-card"><div class="stat-icon green" data-icon="statDevices"></div><div class="stat-content"><div id="report-devices-windows" class="stat-value">-</div><div class="stat-label">Windows</div></div></div>
+                                    <div class="stat-card"><div class="stat-icon cyan" data-icon="statDevices"></div><div class="stat-content"><div id="report-devices-macos" class="stat-value">-</div><div class="stat-label">macOS</div></div></div>
+                                    <div class="stat-card"><div class="stat-icon orange" data-icon="statDevices"></div><div class="stat-content"><div id="report-devices-mobile" class="stat-value">-</div><div class="stat-label">Android/iOS</div></div></div>
+                                </div>
+                                <div class="card"><div class="card-header"><h3 data-i18n="reportByOS">Répartition par système d'exploitation</h3></div><div class="card-body"><div class="table-container"><table><thead><tr><th data-i18n="reportOS">Système d'exploitation</th><th data-i18n="reportCount">Nombre</th><th data-i18n="reportPercent">Pourcentage</th></tr></thead><tbody id="devices-os-table-body"></tbody></table></div></div></div>
+                            </div>
+                            <div id="report-apps" class="report-section hidden">
+                                <h3 class="mb-3" data-i18n="reportTabApps">Rapport des applications</h3>
+                                <div class="grid grid-3 mb-4">
+                                    <div class="stat-card"><div class="stat-icon blue" data-icon="apps"></div><div class="stat-content"><div id="report-apps-total" class="stat-value">-</div><div class="stat-label" data-i18n="reportTotalApps">Total applications</div></div></div>
+                                    <div class="stat-card"><div class="stat-icon green" data-icon="apps"></div><div class="stat-content"><div id="report-apps-store" class="stat-value">-</div><div class="stat-label">Store Apps</div></div></div>
+                                    <div class="stat-card"><div class="stat-icon orange" data-icon="apps"></div><div class="stat-content"><div id="report-apps-lob" class="stat-value">-</div><div class="stat-label">LOB Apps</div></div></div>
+                                </div>
+                                <div class="card"><div class="card-header"><h3 data-i18n="reportRecentApps">Applications récentes</h3></div><div class="table-container"><table><thead><tr><th data-i18n="thName">Nom</th><th data-i18n="thPublisher">Éditeur</th><th data-i18n="thType">Type</th><th data-i18n="reportCreated">Date de création</th></tr></thead><tbody id="apps-report-table-body"></tbody></table></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Paramètres (langue uniquement, pour admins secondaires) -->
+                <div id="page-settings" class="page-content hidden">
+                    <div class="page-header">
+                        <div><h2 class="page-title" id="settings-page-title" data-i18n="settingsTitle">Paramètres</h2><p class="page-subtitle" id="settings-page-subtitle" data-i18n="settingsSubtitle">Changer la langue d'affichage</p></div>
+                    </div>
+                    <form id="operator-settings-form" class="card">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label class="form-label" id="settings-language-label" data-i18n="siteLanguage">Langue du site</label>
+                                <select id="operator-setting-language" class="form-select" style="max-width:220px;">
+                                    <option value="fr-FR">Français</option>
+                                    <option value="en">English</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary mt-3" id="operator-settings-save" data-i18n="save">Enregistrer</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Set Primary User Modal -->
+                <div id="set-primary-user-modal" class="modal-overlay">
+                    <div class="modal">
+                        <div class="modal-header"><h3 class="modal-title" data-i18n="modalSetPrimaryUser">Définir l'utilisateur principal</h3><button class="modal-close" onclick="closeSetPrimaryUserModal()">&times;</button></div>
+                        <div class="modal-body">
+                            <input type="hidden" id="set-primary-user-device-id" />
+                            <div class="form-group"><label class="form-label" data-i18n="userAzureAd">Utilisateur Azure AD</label><select id="set-primary-user-select" class="form-select"></select></div>
+                        </div>
+                        <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeSetPrimaryUserModal()" data-i18n="cancel">Annuler</button><button type="button" class="btn btn-primary" onclick="submitSetPrimaryUser()" data-i18n="save">Enregistrer</button></div>
+                    </div>
+                </div>
+
+                <!-- No Access -->
+                <div id="page-noaccess" class="page-content hidden">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔒</div>
+                        <h3 class="empty-state-title" data-i18n="noAccessTitle">Accès non autorisé</h3>
+                        <p class="empty-state-text" data-i18n="noAccessText">Vous n'avez pas la permission d'accéder à cette fonctionnalité.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="js/operator.js"></script>
+    <script>
+        // Initialize icons in navigation and buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            // Navigation icons
+            document.querySelectorAll('.nav-item[data-icon]').forEach(item => {
+                const iconName = item.dataset.icon;
+                const iconEl = item.querySelector('.nav-item-icon');
+                if (iconEl && typeof getIcon === 'function') {
+                    iconEl.innerHTML = getIcon(iconName);
+                }
+            });
+            // Button icons
+            document.querySelectorAll('.btn-icon[data-icon]').forEach(iconEl => {
+                const iconName = iconEl.dataset.icon;
+                if (typeof getIcon === 'function') {
+                    iconEl.innerHTML = getIcon(iconName);
+                }
+            });
+            // Stat card icons
+            document.querySelectorAll('.stat-icon[data-icon]').forEach(iconEl => {
+                const iconName = iconEl.dataset.icon;
+                if (typeof getIcon === 'function') {
+                    iconEl.innerHTML = getIcon(iconName);
+                }
+            });
+            // Theme toggle icon
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle && typeof getIcon === 'function') {
+                const currentTheme = getTheme();
+                themeToggle.innerHTML = currentTheme === 'dark' ? getIcon('themeLight') : getIcon('theme');
+            }
+        });
+    </script>
+</body>
+</html>

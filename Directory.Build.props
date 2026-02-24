@@ -1,0 +1,6 @@
+<Project>
+  <!-- NETSDK1194 : ne pas utiliser l'option output avec dotnet build sur la solution. Utiliser dotnet build projet.csproj -o ... ou dotnet publish -o ... -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);NETSDK1194</NoWarn>
+  </PropertyGroup>
+</Project>

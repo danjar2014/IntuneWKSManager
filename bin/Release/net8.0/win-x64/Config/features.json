@@ -1,0 +1,168 @@
+{
+  "Features": [
+    {
+      "Id": "device-management",
+      "Name": "Gestion des Appareils",
+      "Description": "Gérer les appareils Windows inscrits dans Intune",
+      "Icon": "laptop",
+      "IsEnabled": true,
+      "RequiredPermission": "devices.read",
+      "SubFeatures": [
+        {
+          "Id": "device-list",
+          "Name": "Liste des appareils",
+          "IsEnabled": true,
+          "RequiredPermission": "devices.read"
+        },
+        {
+          "Id": "device-sync",
+          "Name": "Synchronisation",
+          "IsEnabled": true,
+          "RequiredPermission": "devices.sync"
+        },
+        {
+          "Id": "device-wipe",
+          "Name": "Effacement à distance",
+          "IsEnabled": true,
+          "RequiredPermission": "devices.wipe"
+        },
+        {
+          "Id": "device-restart",
+          "Name": "Redémarrage à distance",
+          "IsEnabled": true,
+          "RequiredPermission": "devices.restart"
+        },
+        {
+          "Id": "device-retire",
+          "Name": "Mise hors service",
+          "IsEnabled": false,
+          "RequiredPermission": "devices.retire"
+        }
+      ]
+    },
+    {
+      "Id": "user-management",
+      "Name": "Gestion des Utilisateurs",
+      "Description": "Consulter les utilisateurs Azure AD et leurs appareils",
+      "Icon": "users",
+      "IsEnabled": true,
+      "RequiredPermission": "users.read",
+      "SubFeatures": [
+        {
+          "Id": "user-list",
+          "Name": "Liste des utilisateurs",
+          "IsEnabled": true,
+          "RequiredPermission": "users.read"
+        },
+        {
+          "Id": "user-devices",
+          "Name": "Appareils par utilisateur",
+          "IsEnabled": true,
+          "RequiredPermission": "users.read"
+        }
+      ]
+    },
+    {
+      "Id": "app-management",
+      "Name": "Gestion des Applications",
+      "Description": "Gérer les applications déployées via Intune",
+      "Icon": "grid",
+      "IsEnabled": true,
+      "RequiredPermission": "apps.read",
+      "SubFeatures": [
+        {
+          "Id": "app-list",
+          "Name": "Liste des applications",
+          "IsEnabled": true,
+          "RequiredPermission": "apps.read"
+        },
+        {
+          "Id": "app-assignment",
+          "Name": "Assignation d'applications",
+          "IsEnabled": true,
+          "RequiredPermission": "apps.assign"
+        },
+        {
+          "Id": "app-status",
+          "Name": "État d'installation",
+          "IsEnabled": true,
+          "RequiredPermission": "apps.read"
+        }
+      ]
+    },
+    {
+      "Id": "policy-management",
+      "Name": "Gestion des Politiques",
+      "Description": "Consulter et gérer les politiques de configuration",
+      "Icon": "shield",
+      "IsEnabled": true,
+      "RequiredPermission": "policies.read",
+      "SubFeatures": [
+        {
+          "Id": "compliance-policies",
+          "Name": "Politiques de conformité",
+          "IsEnabled": true,
+          "RequiredPermission": "policies.read"
+        },
+        {
+          "Id": "config-profiles",
+          "Name": "Profils de configuration",
+          "IsEnabled": true,
+          "RequiredPermission": "policies.read"
+        },
+        {
+          "Id": "security-baselines",
+          "Name": "Lignes de base de sécurité",
+          "IsEnabled": false,
+          "RequiredPermission": "policies.read"
+        }
+      ]
+    },
+    {
+      "Id": "reporting",
+      "Name": "Rapports",
+      "Description": "Consulter les rapports et tableaux de bord",
+      "Icon": "chart",
+      "IsEnabled": true,
+      "RequiredPermission": "reports.read",
+      "SubFeatures": [
+        {
+          "Id": "compliance-report",
+          "Name": "Rapport de conformité",
+          "IsEnabled": true,
+          "RequiredPermission": "reports.read"
+        },
+        {
+          "Id": "device-report",
+          "Name": "Rapport des appareils",
+          "IsEnabled": true,
+          "RequiredPermission": "reports.read"
+        },
+        {
+          "Id": "app-report",
+          "Name": "Rapport des applications",
+          "IsEnabled": true,
+          "RequiredPermission": "reports.read"
+        }
+      ]
+    }
+  ],
+  "Clients": [
+    {
+      "Id": "client-1",
+      "Name": "Contoso Corp",
+      "TenantId": "",
+      "IsActive": true,
+      "EnabledFeatures": ["device-management", "user-management", "app-management", "policy-management", "reporting"],
+      "DisabledSubFeatures": ["device-wipe", "device-retire"]
+    },
+    {
+      "Id": "client-2",
+      "Name": "Fabrikam Inc",
+      "TenantId": "",
+      "IsActive": true,
+      "EnabledFeatures": ["device-management", "user-management", "reporting"],
+      "DisabledSubFeatures": ["device-wipe", "device-retire", "device-restart"]
+    }
+  ]
+}

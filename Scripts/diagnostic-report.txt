@@ -1,0 +1,60 @@
+﻿VERIFICATION COMPLETE IntuneWksManager - 2026-01-27 14:31:20
+SitePath: c:\IntuneWksManager\IntuneWksManager\bin\Debug\net8.0\publish-iis | AppPool: IntuneWksManager
+Dossier site: c:\IntuneWksManager\IntuneWksManager\bin\Debug\net8.0\publish-iis
+
+--- 1. .NET ---
+[OK] dotnet trouve: C:\Program Files\dotnet\dotnet.exe
+[OK] Version: 8.0.417
+[OK] ASP.NET Core 8.0 present
+[OK] .NET Core Runtime 8.0 present
+
+--- 2. Dossier du site et fichiers ---
+[OK] Dossier existe: c:\IntuneWksManager\IntuneWksManager\bin\Debug\net8.0\publish-iis
+[ERREUR] IntuneWksManager.dll ABSENT
+[OK] web.config present
+[OK] appsettings.json present
+[OK] IntuneWksManager.deps.json present
+[OK] IntuneWksManager.runtimeconfig.json present
+[OK] Config\ existe
+[ATTENTION] logs\ absent; creer: New-Item -ItemType Directory -Path 'c:\IntuneWksManager\IntuneWksManager\bin\Debug\net8.0\publish-iis\logs' -Force
+[ERREUR] wwwroot\ absent
+
+--- 3. web.config ---
+[OK] Handler AspNetCoreModuleV2 present
+[OK] processPath=dotnet
+[OK] arguments pointe vers IntuneWksManager.dll
+[ERREUR] hostingModel=inprocess avec processPath=dotnet => erreur 0x8007000d. Remplacer par outofprocess.
+[OK] stdoutLogEnabled=true
+
+--- 4. appsettings.json ---
+[OK] Fichier JSON valide
+[OK] Section AzureAd presente
+[ATTENTION] Section PrimaryAdmin absente
+[OK] AzureAd.TenantId renseigne
+[OK] AzureAd.ClientId renseigne
+
+--- 5. Module IIS ASP.NET Core ---
+[ATTENTION] WebAdministration non disponible: Process should have elevated status to access IIS configuration data.
+
+--- 6. Application Pool ---
+[ERREUR] App Pool 'IntuneWksManager' absent.
+Creer: New-WebAppPool -Name 'IntuneWksManager'; Set-ItemProperty 'IIS:\AppPools\IntuneWksManager' -Name managedRuntimeVersion -Value ''
+
+--- 7. Site ou Application IIS ---
+[ATTENTION] Verification site: Cannot find a provider with the name 'WebAdministration'.
+
+--- 8. Permissions (IIS_IUSRS) ---
+[ATTENTION] Verifier droits IIS_IUSRS sur c:\IntuneWksManager\IntuneWksManager\bin\Debug\net8.0\publish-iis
+[ATTENTION] Accorder Modify a IIS_IUSRS sur Config\
+
+--- 9. Derniers logs stdout ---
+[ATTENTION] Dossier logs\ absent
+
+--- 10. Journal des evenements (erreurs recentes) ---
+[OK] Aucune erreur IIS/ASP.NET dans les 2 dernieres heures
+
+--- 11. Test demarrage application (dotnet exec) ---
+Test demarrage ignore (dotnet ou dll absent)
+
+--- RESUME ---
+Erreurs: 4 | Avertissements: 7
