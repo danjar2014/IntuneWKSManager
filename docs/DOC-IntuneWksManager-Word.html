@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Documentation technique IntuneWksManager — Word</title>
+  <style>
+    body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.35; margin: 2cm; }
+    h1 { font-size: 18pt; color: #1a5276; border-bottom: 2px solid #1a5276; padding-bottom: 4px; }
+    h2 { font-size: 14pt; color: #2874a6; margin-top: 1.2em; }
+    h3 { font-size: 12pt; color: #2e86ab; margin-top: 1em; }
+    table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+    th, td { border: 1px solid #bdc3c7; padding: 6px 10px; text-align: left; }
+    th { background: #ebf5fb; font-weight: bold; }
+    .schema-placeholder { border: 2px dashed #3498db; background: #f4f9fc; padding: 20px; text-align: center; color: #2874a6; margin: 1em 0; }
+    .mermaid-block { background: #f8f9fa; padding: 12px; font-family: Consolas, monospace; font-size: 9pt; overflow-x: auto; white-space: pre; border: 1px solid #dee2e6; }
+    .note { background: #fff3cd; border-left: 4px solid #ffc107; padding: 8px 12px; margin: 0.8em 0; }
+    .tip { background: #d4edda; border-left: 4px solid #28a745; padding: 8px 12px; margin: 0.8em 0; }
+    ul, ol { margin: 0.5em 0; }
+    li { margin: 0.25em 0; }
+    p { margin: 0.6em 0; }
+    .toc { margin-bottom: 2em; }
+    .toc a { color: #2874a6; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .page-break { page-break-before: always; }
+  </style>
+</head>
+<body>
+
+<h1>Documentation technique IntuneWksManager</h1>
+<p><strong>Portail d’administration Intune — Architecture, déploiement SQL, RBAC, sauvegarde et connexions</strong></p>
+<p><strong>Version :</strong> 1.0 — <strong>Date :</strong> 2025</p>
+
+<div class="toc">
+  <h2>Sommaire</h2>
+  <ol>
+    <li><a href="#vue-ensemble">Vue d’ensemble</a></li>
+    <li><a href="#sql-mecm">Base de données SQL sur l’instance MECM</a></li>
+    <li><a href="#connexions">Connexion des utilisateurs (Admin / Opérateurs) — Schéma physique</a></li>
+    <li><a href="#rbac">Modèle RBAC (rôles et permissions)</a></li>
+    <li><a href="#backup">Sauvegarde et restauration</a></li>
+    <li><a href="#clients">Clients (multi-tenant) et accès</a></li>
+    <li><a href="#visio">Spécifications pour schémas Visio</a></li>
+  </ol>
+</div>
+
+<!-- ==================== 1. VUE D'ENSEMBLE ==================== -->
+<h2 id="vue-ensemble">1. Vue d’ensemble</h2>
+<p>IntuneWksManager est un portail web interne qui permet de gérer les appareils et ressources Microsoft Intune via l’API Microsoft Graph. Les utilisateurs se connectent avec leur compte Microsoft Entra ID (Azure AD) et accèdent soit à l’interface <strong>Administrateur principal</strong>, soit à l’interface <strong>Opérateur</strong> (admin secondaire), selon leur profil et les permissions RBAC.</p>
+<p>Le portail peut stocker sa configuration en <strong>fichiers JSON</strong> (dossier <code>Config</code>) ou en <strong>base SQL Server</strong>. En production, la base SQL peut être hébergée sur <strong>l’instance SQL Server existante utilisée par MECM (Microsoft Endpoint Configuration Manager)</strong>, afin de mutualiser l’infrastructure et les sauvegardes.</p>
+
+<!-- ==================== 2. SQL SUR INSTANCE MECM ==================== -->
+<h2 id="sql-mecm">2. Base de données SQL sur l’instance MECM</h2>
+
+<h3>2.1 Principe</h3>
+<p>La base de données du portail IntuneWksManager peut être installée sur <strong>le même serveur SQL Server que celui utilisé par MECM</strong>. Il s’agit d’une <strong>base distincte</strong> (par défaut nommée <code>IntuneWksManager</code>) sur cette instance, et non d’une modification des bases MECM existantes.</p>
+<ul>
+  <li><strong>Instance SQL :</strong> celle qui héberge déjà les bases de données de MECM (site, base de données de site, etc.).</li>
+  <li><strong>Nouvelle base :</strong> une base dédiée <code>IntuneWksManager</code> est créée sur cette instance.</li>
+  <li><strong>Table utilisée :</strong> une seule table <code>ConfigStore</code> (clé / valeur JSON) pour toute la configuration du portail (utilisateurs, rôles, paramètres, audit, secrets Azure AD).</li>
+</ul>
+
+<h3>2.2 Structure de la base</h3>
+<table>
+  <thead>
+    <tr><th>Table</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>ConfigStore</strong></td><td>Table unique : colonnes <code>Key</code> (NVARCHAR(100)), <code>Value</code> (NVARCHAR(MAX)), <code>UpdatedAt</code> (DATETIME2). Les entrées correspondent aux blocs de configuration (Users, Features, Settings, Audit, AzureAdSecrets) sérialisés en JSON.</td></tr>
+  </tbody>
+</table>
+
+<h3>2.3 Configuration du portail pour pointer vers l’instance MECM</h3>
+<p>Dans la page <strong>Configuration système → Stockage</strong> du portail (ou via le fichier <code>Config/storage.json</code>), renseigner :</p>
+<ul>
+  <li><strong>Fournisseur :</strong> SQL Server</li>
+  <li><strong>Serveur :</strong> nom ou adresse du serveur SQL qui héberge MECM (ex. <code>SRV-MECM</code> ou <code>MECM-SQL.contoso.local</code>)</li>
+  <li><strong>Port :</strong> 1433 (ou port personnalisé si configuré)</li>
+  <li><strong>Base de données :</strong> <code>IntuneWksManager</code> (créée automatiquement par le script « Créer les tables » du portail si la base existe déjà sur l’instance)</li>
+  <li><strong>Authentification :</strong> soit <strong>Authentification Windows</strong> (compte du pool d’applications IIS ou impersonation), soit <strong>Authentification SQL</strong> (utilisateur/mot de passe dédié à cette base)</li>
+</ul>
+<p class="note"><strong>Note :</strong> La base <code>IntuneWksManager</code> doit être créée au préalable sur l’instance SQL (manuellement ou par script). L’option « Créer les tables » du portail crée uniquement la table <code>ConfigStore</code> dans cette base ; elle ne crée pas la base elle-même.</p>
+
+<div class="schema-placeholder">
+  <strong>Schéma 1 — Instance SQL MECM et base IntuneWksManager</strong><br/>
+  Insérer ici le schéma exporté depuis Visio (voir section 7 — Schéma « SQL sur instance MECM »).
+</div>
+
+<!-- ==================== 3. CONNEXIONS UTILISATEURS ==================== -->
+<h2 id="connexions">3. Connexion des utilisateurs (Admin / Opérateurs) — Schéma physique</h2>
+
+<h3>3.1 Qui se connecte et comment</h3>
+<ul>
+  <li><strong>Administrateur principal :</strong> utilise un navigateur sur son PC de travail, accède à l’URL du portail (ex. <code>https://serveur/IntuneWksManager</code>), est redirigé vers Microsoft Entra ID pour se connecter, puis accède à l’interface Admin (tableau de bord, configuration, utilisateurs, Graph, etc.).</li>
+  <li><strong>Opérateur (admin secondaire) :</strong> même principe — PC + navigateur, connexion Entra ID, puis accès à l’interface Opérateur avec des droits limités par son rôle et ses permissions.</li>
+</ul>
+<p>Il n’y a pas d’« agent » ou de logiciel à installer sur les postes : tout passe par le <strong>navigateur</strong> et l’<strong>authentification Entra ID</strong>. Les « clients » du portail sont donc les <strong>utilisateurs (personnes)</strong> qui se connectent depuis leur PC ; les <strong>appareils gérés</strong> sont ceux visibles dans Intune via l’API Graph, pas des « clients » du portail au sens logiciel.</p>
+
+<h3>3.2 Parcours technique (résumé)</h3>
+<ol>
+  <li>PC (navigateur) → requête HTTPS vers le serveur IIS hébergeant IntuneWksManager.</li>
+  <li>IIS / application → si non authentifié, redirection vers Entra ID (login.microsoftonline.com).</li>
+  <li>Après connexion, Entra ID redirige vers le portail (signin-oidc) ; l’application établit la session (cookie) et détermine le profil (PrimaryAdmin ou SecondaryAdmin approuvé).</li>
+  <li>Pour les données de configuration (utilisateurs, paramètres, etc.) : l’application interroge soit les fichiers JSON (Config), soit la base SQL (instance MECM si configurée).</li>
+  <li>Pour les données Intune (appareils, utilisateurs, applications, politiques) : l’application appelle Microsoft Graph avec le Client ID + Client Secret enregistrés (flux application).</li>
+</ol>
+
+<div class="schema-placeholder">
+  <strong>Schéma 2 — Connexion Admin / Opérateurs (PC → IIS → Entra ID / SQL / Graph)</strong><br/>
+  Insérer ici le schéma exporté depuis Visio (voir section 7 — Schéma « Connexion utilisateurs »).
+</div>
+
+<!-- ==================== 4. RBAC ==================== -->
+<h2 id="rbac">4. Modèle RBAC (rôles et permissions)</h2>
+
+<h3>4.1 Hiérarchie des accès</h3>
+<ul>
+  <li><strong>Administrateur principal :</strong> accès complet au portail (configuration, stockage, Azure AD, admins secondaires, Graph, audit, sauvegarde/restauration). Aucune restriction par rôle.</li>
+  <li><strong>Administrateur secondaire (opérateur) :</strong> accès à l’interface Opérateur ; les onglets et actions visibles dépendent des <strong>permissions</strong> qui lui sont attribuées (directement ou via un rôle).</li>
+</ul>
+
+<h3>4.2 Rôles par défaut</h3>
+<table>
+  <thead>
+    <tr><th>Rôle</th><th>Description</th><th>Permissions typiques</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>FullAdmin</td><td>Administration complète (côté opérateur)</td><td>devices.*, users.read, apps.*, policies.read, reports.*, reports.export</td></tr>
+    <tr><td>Operator</td><td>Opérations courantes sur les appareils</td><td>devices.read, devices.sync, devices.restart, users.read, apps.read, policies.read, reports.*</td></tr>
+    <tr><td>Viewer</td><td>Consultation uniquement</td><td>devices.read, users.read, apps.read, policies.read, reports.read, reports.compliance, reports.devices, reports.apps</td></tr>
+    <tr><td>Custom</td><td>Permissions personnalisées</td><td>À définir par l’admin</td></tr>
+  </tbody>
+</table>
+
+<h3>4.3 Permissions granulaires (extrait)</h3>
+<table>
+  <thead>
+    <tr><th>Catégorie</th><th>Code</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Appareils</td><td>devices.read, devices.sync, devices.restart, devices.wipe, devices.retire, devices.setPrimaryUser</td><td>Lecture, synchronisation, redémarrage, effacement, retrait, utilisateur principal</td></tr>
+    <tr><td>Utilisateurs</td><td>users.read</td><td>Voir les utilisateurs Azure AD</td></tr>
+    <tr><td>Applications</td><td>apps.read, apps.assign</td><td>Lire / assigner les applications Intune</td></tr>
+    <tr><td>Politiques</td><td>policies.read</td><td>Lire les politiques de conformité</td></tr>
+    <tr><td>Rapports</td><td>reports.read, reports.compliance, reports.devices, reports.apps, reports.export</td><td>Consulter et exporter les rapports</td></tr>
+  </tbody>
+</table>
+
+<p>L’attribution se fait par <strong>rôle</strong> (qui porte une liste de permissions) et éventuellement par <strong>permissions supplémentaires</strong> sur le compte de l’admin secondaire. Une permission de « lecture » (ex. <code>devices.read</code>) peut être exigée automatiquement lorsqu’une action dépendante (ex. <code>devices.sync</code>) est cochée.</p>
+
+<div class="schema-placeholder">
+  <strong>Schéma 3 — Modèle RBAC (Admin principal / Opérateurs / Rôles / Permissions)</strong><br/>
+  Insérer ici le schéma exporté depuis Visio (voir section 7 — Schéma « RBAC »).
+</div>
+
+<!-- ==================== 5. SAUVEGARDE ET RESTAURATION ==================== -->
+<h2 id="backup">5. Sauvegarde et restauration</h2>
+
+<h3>5.1 Objectif</h3>
+<p>Permettre à un administrateur principal de créer une <strong>sauvegarde chiffrée</strong> de toute la configuration du portail (utilisateurs, rôles, fonctionnalités, paramètres, audit, secrets Azure AD, paramètres de stockage) et de la <strong>restaurer</strong> sur la même machine ou une autre (y compris après bascule JSON ↔ SQL).</p>
+
+<h3>5.2 Contenu de la sauvegarde</h3>
+<ul>
+  <li>Configuration des <strong>utilisateurs</strong> (admins principaux, admins secondaires, rôles, permissions, demandes d’accès)</li>
+  <li>Configuration des <strong>fonctionnalités et clients</strong> (multi-tenant)</li>
+  <li><strong>Paramètres du portail</strong> (thème, timeout, maintenance, etc.)</li>
+  <li><strong>Journal d’audit</strong></li>
+  <li><strong>Secrets Azure AD</strong> (TenantId, ClientId, ClientSecret chiffré)</li>
+  <li><strong>Paramètres de stockage</strong> (provider, serveur, base, authentification) — pour pouvoir restaurer en JSON ou en SQL</li>
+</ul>
+
+<h3>5.3 Format et sécurité</h3>
+<ul>
+  <li>Fichier binaire avec en-tête <code>IWMBACKUP</code>, version du format (v3), puis contenu <strong>chiffré en AES</strong> (clé aléatoire par sauvegarde).</li>
+  <li><strong>Clé de restauration :</strong> générée à la création, affichée <strong>une seule fois</strong> à l’administrateur ; elle n’est pas stockée dans le fichier. Lors de la restauration, l’utilisateur doit coller cette clé (Base64). Sans elle, la restauration est impossible.</li>
+</ul>
+
+<h3>5.4 Flux fonctionnel</h3>
+<ol>
+  <li><strong>Création de sauvegarde :</strong> l’admin principal clique sur « Sauvegarder » (Configuration système ou équivalent). L’application agrège toutes les données depuis le stockage courant (JSON ou SQL), sérialise en JSON, génère une clé AES et un IV aléatoires, chiffre le tout, produit un fichier binaire et affiche la clé de restauration (à copier et conserver en lieu sûr).</li>
+  <li><strong>Téléchargement :</strong> le navigateur télécharge le fichier de sauvegarde (.bin ou similaire).</li>
+  <li><strong>Restauration :</strong> l’admin choisit le fichier de sauvegarde et saisit la clé de restauration. L’application déchiffre le contenu, désérialise la configuration, met à jour <code>Config/storage.json</code> avec les paramètres de stockage de la sauvegarde, puis écrit toutes les données soit en JSON (fichiers Config), soit en SQL (création/connexion au repository SQL et écriture des blocs Users, Features, Settings, Audit, AzureAdSecrets). Après restauration, un redémarrage ou rechargement de la configuration est recommandé.</li>
+</ol>
+
+<div class="schema-placeholder">
+  <strong>Schéma 4 — Flux Sauvegarde et Restauration</strong><br/>
+  Insérer ici le schéma exporté depuis Visio (voir section 7 — Schéma « Sauvegarde / Restauration »).
+</div>
+
+<!-- ==================== 6. CLIENTS MULTI-TENANT ==================== -->
+<h2 id="clients">6. Clients (multi-tenant) et accès</h2>
+
+<p>Dans ce portail, le terme <strong>« clients »</strong> désigne les entités <strong>organisation / tenant</strong> configurables dans la section Fonctionnalités (Configuration système) : chaque client a un nom, un identifiant, un TenantId optionnel, et une liste de fonctionnalités activées ou désactivées. Ce ne sont pas les postes des utilisateurs finaux.</p>
+<p>Les <strong>utilisateurs</strong> qui se connectent au portail (admins et opérateurs) le font depuis leur <strong>PC</strong> via un <strong>navigateur</strong> ; ils s’authentifient une fois auprès d’Entra ID et accèdent soit à l’interface Admin, soit à l’interface Opérateur. Le schéma de la section 3 illustre ce flux (PC → IIS → Entra ID / SQL / Graph).</p>
+
+<div class="schema-placeholder">
+  <strong>Schéma 5 — Clients multi-tenant (configuration) et connexion des utilisateurs</strong><br/>
+  Insérer ici le schéma exporté depuis Visio (voir section 7 — Schéma « Clients et connexion »).
+</div>
+
+<!-- ==================== 7. SPÉCIFICATIONS VISIO ==================== -->
+<h2 id="visio" class="page-break">7. Spécifications pour dessiner les schémas dans Visio</h2>
+
+<p>Les paragraphes suivants décrivent comment reproduire chaque schéma dans Microsoft Visio (formes, libellés, flux). Vous pouvez créer un diagramme par section, l’exporter en image (PNG/EMF) et l’insérer à la place des zones « Schéma » dans ce document Word.</p>
+
+<h3>Schéma 1 — Instance SQL MECM et base IntuneWksManager</h3>
+<ul>
+  <li><strong>Formes :</strong> un rectangle « Serveur SQL Server (instance MECM) » ; à l’intérieur ou à côté, un rectangle « Base MECM (bases site, etc.) » et un rectangle « Base IntuneWksManager » avec la table <code>ConfigStore</code>.</li>
+  <li><strong>Flèches :</strong> « Application IntuneWksManager (IIS) » → connexion vers « Serveur SQL Server » avec la légende « Connexion SQL (Windows ou SQL Auth) — Base IntuneWksManager ».</li>
+  <li><strong>Légende :</strong> « La base IntuneWksManager est une base distincte sur la même instance SQL que MECM. »</li>
+</ul>
+
+<h3>Schéma 2 — Connexion Admin / Opérateurs (PC → IIS → Entra ID / SQL / Graph)</h3>
+<ul>
+  <li><strong>Formes :</strong> (gauche) « PC utilisateur » (Admin ou Opérateur) avec icône navigateur ; (centre) « Serveur IIS » avec « Application IntuneWksManager » ; (droite) trois blocs : « Microsoft Entra ID », « SQL Server (instance MECM) », « Microsoft Graph API ».</li>
+  <li><strong>Flèches :</strong> PC → IIS : « HTTPS » ; IIS → Entra ID : « Connexion / Redirect OIDC » ; IIS → SQL : « Config (Users, Settings, Audit…) » ; IIS → Graph : « Appareils, Utilisateurs, Apps, Politiques (Client Credentials) ».</li>
+  <li><strong>Légende :</strong> « Les utilisateurs se connectent depuis leur PC via le navigateur ; l’application s’authentifie auprès d’Entra ID et lit/écrit la config en SQL (ou JSON) et appelle Graph pour Intune. »</li>
+</ul>
+
+<h3>Schéma 3 — Modèle RBAC</h3>
+<ul>
+  <li><strong>Formes :</strong> en haut « Administrateur principal » (accès complet) ; en dessous « Administrateurs secondaires (Opérateurs) » reliés à des « Rôles » (FullAdmin, Operator, Viewer, Custom) ; chaque rôle relié à un ensemble « Permissions » (devices.read, devices.sync, reports.*, etc.).</li>
+  <li><strong>Flèches :</strong> Admin secondaire → Rôle (affectation) ; Rôle → Permissions (contient).</li>
+  <li><strong>Légende :</strong> « Les opérateurs ont un rôle ; le rôle définit la liste des permissions qui déterminent les onglets et actions visibles dans l’interface Opérateur. »</li>
+</ul>
+
+<h3>Schéma 4 — Sauvegarde et Restauration</h3>
+<ul>
+  <li><strong>Sauvegarde :</strong> « Admin » → « Portail (Sauvegarder) » → « Agrégation Config (JSON/SQL) » → « Chiffrement AES + clé unique » → « Fichier .bin » et « Clé de restauration (affichée 1 fois) ».</li>
+  <li><strong>Restauration :</strong> « Admin » → « Portail (Restaurer) » + « Fichier .bin » + « Clé de restauration » → « Déchiffrement » → « Mise à jour storage.json » → « Écriture Config (JSON ou SQL) ».</li>
+  <li><strong>Légende :</strong> « La clé de restauration n’est pas dans le fichier ; elle doit être conservée par l’admin pour toute restauration future. »</li>
+</ul>
+
+<h3>Schéma 5 — Clients et connexion utilisateurs</h3>
+<ul>
+  <li>Reprendre le schéma 2 (PC → IIS → Entra ID / SQL / Graph). Ajouter une zone « Configuration portail » : « Clients (multi-tenant) » = liste d’entités (Nom, TenantId, Fonctionnalités activées) stockée dans Config/Features ou table ConfigStore. Une flèche « Lecture config » depuis IIS vers SQL/JSON pour indiquer que la liste des clients et leurs droits sont lus depuis le stockage.</li>
+</ul>
+
+<hr/>
+<p><em>Document généré pour import dans Microsoft Word. Enregistrer ce fichier en .docx depuis Word (Fichier → Enregistrer sous → Document Word) puis insérer les schémas Visio aux emplacements indiqués.</em></p>
+
+</body>
+</html>
